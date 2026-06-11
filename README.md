@@ -1,36 +1,140 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CRM EAYA
 
-## Getting Started
+Sistema de gestión y análisis comercial desarrollado con Next.js, TypeScript y SQL Server.
 
-First, run the development server:
+## Funcionalidades
+
+- Login seguro
+- Recuperación de contraseña
+- Administración de usuarios
+- Gestión de perfiles
+- Cambio de avatar
+- Roles de usuario
+    - Admin
+    - Gerente
+    - Supervisor
+    - Vendedor
+- Menú dinámico según permisos
+- API Routes
+- Integración con Supabase
+
+## Tecnologías utilizadas
+
+* Next.js 16
+* React
+* TypeScript
+* SQL Server
+* Recharts
+* Docker
+* GitHub
+
+## Requisitos
+
+* Node.js 22+
+* SQL Server accesible
+* npm
+
+## Arquitectura 
+Next.js
+│
+├── App Router
+├── Components
+├── Context
+├── API Routes
+├── Lib
+│
+└── Supabase
+        │
+        ├── Auth
+        ├── Database
+        └── Storage
+
+## Instalación local
+
+Instalar dependencias:
+
+```bash
+npm install
+```
+
+Ejecutar en modo desarrollo:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+La aplicación estará disponible en:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Variables de entorno
 
-## Learn More
+Crear un archivo `.env.local` utilizando como referencia el archivo `.env.example`.
 
-To learn more about Next.js, take a look at the following resources:
+## Docker
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Construir la imagen:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+docker compose build
+```
 
-## Deploy on Vercel
+Levantar el contenedor:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+docker compose up
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Detener el contenedor:
+
+```bash
+docker compose down
+```
+
+## Estructura del proyecto
+
+```text
+app/
+components/
+lib/
+public/
+docker-compose.yml
+Dockerfile
+```
+
+## Roadmap
+
+✔ Login
+
+✔ Roles
+
+✔ Administración de usuarios
+
+✔ Perfil
+
+✔ Avatar
+
+⬜ Prospectos
+
+⬜ Dashboard
+
+⬜ Reportes
+
+⬜ Integración con scoring
+
+⬜ Docker
+
+⬜ CI/CD
+
+⬜ Testing
+
+## Control de versiones
+
+* main: versión estable
+* develop: rama de desarrollo
+
+## Autor
+
+Diego Turconi

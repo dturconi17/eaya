@@ -48,7 +48,6 @@ yarn-error.log*
 next-env.d.ts
 
 prueba_conexion.py
-supabase.js
 
 node_modules
 .next

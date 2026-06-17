@@ -12,10 +12,7 @@ const menuSections = [
     key: "informes_gerencial",
     roles: ["admin", "gerente"],
     items: [
-      { href: "/ventas-region", label: "1. Ventas por Región" },
-      { href: "/ventas-supervision", label: "2. Ventas por Supervision" },
-      { href: "/ventas-vendedor", label: "3. Ventas por Vendedor" },
-
+      { href: "/reportes", label: "1. Resumen Carga de Prospectos" },
     ],
   },
   {
@@ -23,27 +20,23 @@ const menuSections = [
     key: "informes_supervisor",
     roles: ["supervisor"],
     items: [
-      { href: "/ventas-region", label: "1. Ventas por Región" },
-      { href: "/cobertura-historica", label: "2. Cobertura Histórica" },
-      { href: "/cobertura-region", label: "3. Cobertura por Región" },
-    ],
+      { href: "/clientes", label: "1. Ventas por Región" },
+    ]
   },
   {
     title: "📊 Reportes Vendedor",
     key: "informes_vendedor",
     roles: ["vendedor"],
     items: [
-      { href: "/ventas-region", label: "1. Ventas por Región" },
-      { href: "/cobertura-historica", label: "2. Cobertura Histórica" },
-      { href: "/cobertura-region", label: "3. Cobertura por Región" },
-    ],
+      { href: "/clientes", label: "1. Mis Clientes" },
+          ],
   },
   {
     title: "🤝 CRM",
     key: "crm",
     roles: ["admin", "gerente", "supervisor", "vendedor"],
     items: [
-      { href: "/facturacion", label: "1. Facturación" },
+      { href: "/clientes/nuevo", label: "1. Carga de Clientes" },
     ],
   },
   {

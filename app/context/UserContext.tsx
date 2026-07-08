@@ -1,24 +1,12 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import type { User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
 
-type Profile = {
-  id: string
-  email: string
-  full_name: string | null
-  role: string | null
-  supervisor_id: string | null
-  sexo: string | null
-  fecha_nacimiento: string | null
-  avatar_url: string | null
-}
-
 type UserContextType = {
-  user: User | null
-  profile: Profile | null
-  role: string | null
+  user: any
+  profile: any
+  role: string | null // 👈 agregamos esto
   loading: boolean
   refreshProfile: () => Promise<void>
 }
@@ -31,26 +19,23 @@ const UserContext = createContext<UserContextType>({
   refreshProfile: async () => {},
 })
 
-export const UserProvider = ({
-  children,
-}: {
-  children: React.ReactNode
-}) => {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [role, setRole] = useState<string | null>(null)
+export const UserProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [role, setRole] = useState<string | null>(null) // 👈 nuevo estado
   const [loading, setLoading] = useState(true)
 
-  const fetchProfile = async (user: User) => {
-    if (!user.id) {
+  const fetchProfile = async (user: any) => {
+    if (!user?.id) {
       setProfile(null)
       setRole(null)
       return
     }
+    console.log("FETCH PROFILE USER:", user?.id);
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("*")
+      .select("*") // ya trae role si existe en la tabla
       .eq("id", user.id)
       .maybeSingle()
 
@@ -61,8 +46,8 @@ export const UserProvider = ({
       return
     }
 
-    setProfile(data as Profile | null)
-    setRole(data?.role ?? "vendedor")
+    setProfile(data)
+    setRole(data?.role || "vendedor") // 👈 acá se asigna el role
   }
 
   const refreshProfile = async () => {
@@ -76,7 +61,7 @@ export const UserProvider = ({
 
     const init = async () => {
       const { data } = await supabase.auth.getUser()
-      const currentUser = data.user
+      const currentUser = data.user ?? null
 
       if (!mounted) return
 
@@ -91,37 +76,29 @@ export const UserProvider = ({
 
     init()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const currentUser = session?.user ?? null
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        const currentUser = session?.user ?? null
 
-      setUser(currentUser)
+        setUser(currentUser)
 
-      if (currentUser) {
-        await fetchProfile(currentUser)
-      } else {
-        setProfile(null)
-        setRole(null)
+        if (currentUser) {
+          await fetchProfile(currentUser)
+        } else {
+          setProfile(null)
+          setRole(null)
+        }
       }
-    })
+    )
 
     return () => {
       mounted = false
-      subscription.unsubscribe()
+      listener.subscription.unsubscribe()
     }
   }, [])
 
   return (
-    <UserContext.Provider
-      value={{
-        user,
-        profile,
-        role,
-        loading,
-        refreshProfile,
-      }}
-    >
+    <UserContext.Provider value={{ user, profile, role, loading, refreshProfile }}>
       {children}
     </UserContext.Provider>
   )

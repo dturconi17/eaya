@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { useUser } from "@/context/UserContext";
+import { useUser } from "@/app/context/UserContext";
 import { useState, useRef, useEffect, CSSProperties } from "react";
 
 const menuSections = [
@@ -54,44 +54,56 @@ export function SidebarMenu() {
 
   const userRole = role ?? "vendedor";
 
-const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
-  const initial: Record<string, boolean> = {};
-
-  menuSections.forEach((s) => {
-    initial[s.key] = true;
+  const [openSections, setOpenSections] = useState(() => {
+    const initial: any = {};
+    menuSections.forEach((s) => {
+      initial[s.key] = true;
+    });
+    return initial;
   });
-
-  return initial;
-});
-
 
   const [openUserMenu, setOpenUserMenu] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-  dropdownRef.current &&
-  !dropdownRef.current.contains(e.target as Node)
-) {
-  setOpenUserMenu(false);
-}
+    const handleClickOutside = (e: any) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setOpenUserMenu(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const toggleSection = (key: string) => {
-    setOpenSections((prev) => ({
+    setOpenSections((prev: any) => ({
       ...prev,
       [key]: !prev[key],
     }));
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+const handleLogout = async () => {
+  console.log("1 - Inicio logout");
+
+  try {
+    console.log("2 - Llamando signOut");
+
+    const { error } = await supabase.auth.signOut();
+
+    console.log("3 - Respuesta signOut", error);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    console.log("4 - Navegando");
+
     router.replace("/login");
-  };
+  } catch (err) {
+    console.error("5 - Error", err);
+  }
+};
 
   const iniciales = profile?.full_name
     ? profile.full_name
@@ -169,11 +181,7 @@ const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => 
         >
           <div style={avatar}>
             {profile?.avatar_url ? (
-              <img
-  src={profile.avatar_url}
-  alt="Avatar del usuario"
-  style={avatarImg}
-/>
+              <img src={profile.avatar_url} style={avatarImg} />
             ) : (
               iniciales
             )}
@@ -198,9 +206,15 @@ const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => 
 
             <div style={divider} />
 
-            <button onClick={handleLogout} style={{ ...dropdownItem, color: "red" }}>
-              🚪 Cerrar sesión
-            </button>
+            <button
+  onClick={() => {
+    console.log("CLICK BOTÓN");
+    handleLogout();
+  }}
+  style={{ ...dropdownItem, color: "red" }}
+>
+  🚪 Cerrar sesión
+</button>
           </div>
         )}
       </div>
@@ -210,22 +224,22 @@ const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => 
 
 /* 🎨 ESTILOS */
 
-const container: CSSProperties = {
+const container : CSSProperties = {
   display: "flex",
   flexDirection: "column",
   height: "100%",
 };
 
-const menuWrapper: CSSProperties = {
+const menuWrapper : CSSProperties = {
   flex: 1,
   padding: "10px",
 };
 
-const sectionBox: CSSProperties = {
+const sectionBox : CSSProperties = {
   marginBottom: "20px",
 };
 
-const sectionHeader: CSSProperties = {
+const sectionHeader : CSSProperties = {
   padding: "10px 12px",
   fontSize: "15px",
   fontWeight: "bold",
@@ -236,19 +250,19 @@ const sectionHeader: CSSProperties = {
   justifyContent: "space-between",
 };
 
-const activeSection: CSSProperties = {
+const activeSection : CSSProperties = {
   background: "#1f2937",
   color: "white",
 };
 
-const itemsContainer: CSSProperties = {
+const itemsContainer : CSSProperties = {
   marginTop: "10px",
   display: "flex",
   flexDirection: "column",
   gap: "8px",
 };
 
-const itemStyle: CSSProperties = {
+const itemStyle : CSSProperties = {
   padding: "10px 14px",
   borderRadius: "6px",
   fontSize: "16px",
@@ -256,25 +270,25 @@ const itemStyle: CSSProperties = {
   textDecoration: "none",
 };
 
-const activeItem: CSSProperties = {
+const activeItem : CSSProperties = {
   background: "#374151",
   color: "white",
 };
 
-const userContainer: CSSProperties   = {
+const userContainer : CSSProperties = {
   borderTop: "1px solid #1f2937",
   padding: "12px",
   position: "relative",
 };
 
-const userBox: CSSProperties = {
+const userBox : CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "10px",
   cursor: "pointer",
 };
 
-const avatar: CSSProperties = {
+const avatar : CSSProperties = {
   width: "40px",
   height: "40px",
   borderRadius: "50%",
@@ -286,29 +300,29 @@ const avatar: CSSProperties = {
   fontWeight: "bold",
 };
 
-const avatarImg: CSSProperties = {
+const avatarImg : CSSProperties = {
   width: "100%",
   height: "100%",
   borderRadius: "50%",
 };
 
-const userName: CSSProperties = {
+const userName : CSSProperties = {
   fontSize: "14px",
   fontWeight: "bold",
   color: "white",
 };
 
-const userEmail = {
+const userEmail : CSSProperties = {
   fontSize: "12px",
   color: "#9ca3af",
 };
 
-const userRoleStyle: CSSProperties = {
+const userRoleStyle : CSSProperties = {
   fontSize: "11px",
   color: "#6b7280",
 };
 
-const dropdown: CSSProperties = {
+const dropdown : CSSProperties = {
   position: "absolute",
   bottom: "60px",
   left: "10px",
@@ -318,7 +332,7 @@ const dropdown: CSSProperties = {
   overflow: "hidden",
 };
 
-const dropdownItem: CSSProperties = {
+const dropdownItem : CSSProperties = {
   width: "100%",
   padding: "10px",
   background: "transparent",
@@ -328,7 +342,7 @@ const dropdownItem: CSSProperties = {
   cursor: "pointer",
 };
 
-const divider = {
+const divider : CSSProperties = {
   height: "1px",
   background: "#1f2937",
 };

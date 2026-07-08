@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser } from "@/context/UserContext"
+import { useUser } from "@/app/context/UserContext"
 
 export function SidebarProfile() {
   const { profile } = useUser()

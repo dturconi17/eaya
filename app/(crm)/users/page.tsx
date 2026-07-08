@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useUser } from "@/context/UserContext";
+import { useUser } from "@/app/context/UserContext";
 import { useRouter } from "next/navigation";
 
 const roles = ["admin", "gerente", "supervisor", "vendedor"];

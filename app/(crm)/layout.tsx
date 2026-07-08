@@ -3,7 +3,7 @@
 import { SidebarMenu } from "@/app/components/SidebarMenu"
 import { useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { useUser } from "@/context/UserContext"
+import { useUser } from "@/app/context/UserContext"
 
 
 export default function CRMLayout({

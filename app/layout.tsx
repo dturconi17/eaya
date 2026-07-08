@@ -1,5 +1,5 @@
 import "./globals.css";
-import { UserProvider } from "@/context/UserContext";
+import { UserProvider } from "@/app/context/UserContext";
 import Script from "next/script";
 
 export default function RootLayout({

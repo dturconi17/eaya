@@ -3,7 +3,7 @@
 import { useState, CSSProperties } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { useUser } from "@/context/UserContext"
+import { useUser } from "@/app/context/UserContext"
 import { uploadAvatar } from "@/lib/uploadAvatar"
 import { UserAvatar } from "@/app/components/UserAvatar"
 

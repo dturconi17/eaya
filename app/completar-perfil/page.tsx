@@ -1,10 +1,13 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { useUser } from "@/context/UserContext"
+import { useUser } from "@/app/context/UserContext"
+import { container, card, title, form, input, button } from "@/styles/ui"
 
 export default function CompletarPerfil() {
+  const router = useRouter()
   const { user, refreshProfile } = useUser()
 
   const [nombre, setNombre] = useState("")
@@ -12,34 +15,29 @@ export default function CompletarPerfil() {
   const [fecha, setFecha] = useState("")
   const [loading, setLoading] = useState(false)
 
- const guardar = async () => {
-  if (!user) return;
+  const guardar = async () => {
+    if (!nombre || !sexo || !fecha) return
 
-  if (!nombre || !sexo || !fecha) {
-    return;
+    setLoading(true)
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: nombre,
+        sexo: sexo,
+        fecha_nacimiento: fecha,
+      })
+      .eq("id", user.id)
+
+    if (error) {
+      console.error(error.message)
+      setLoading(false)
+      return
+    }
+
+    await refreshProfile()
+    router.replace("/inicio")
   }
-
-  setLoading(true);
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      full_name: nombre,
-      sexo,
-      fecha_nacimiento: fecha,
-    })
-    .eq("id", user.id);
-
-  if (error) {
-    alert(error.message);
-    setLoading(false);
-    return;
-  }
-
-  await refreshProfile();
-
-  window.location.href = "/inicio";
-};
 
   return (
     <div style={container}>
@@ -68,64 +66,11 @@ export default function CompletarPerfil() {
             onChange={(e) => setFecha(e.target.value)}
           />
 
-<button
-  type="button"
-  style={button}
-  onClick={guardar}
-  disabled={loading}
->
-  {loading ? "Guardando..." : "Guardar y continuar"}
-</button>
+          <button style={button} onClick={guardar} disabled={loading}>
+            {loading ? "Guardando..." : "Guardar y continuar"}
+          </button>
         </form>
       </div>
     </div>
   )
-}
-
-
-// ================= STYLES =================
-
-const container = {
-  minHeight: "100vh",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  background: "#f4f6f8",
-}
-
-const card = {
-  width: 400,
-  padding: 30,
-  borderRadius: 12,
-  background: "white",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
-}
-
-const title = {
-  fontSize: 24,
-  marginBottom: 20,
-}
-
-const form = {
-  display: "flex",
-  flexDirection: "column" as const,
-  gap: 15,
-}
-
-const input = {
-  padding: "14px 16px",
-  fontSize: 16,
-  borderRadius: 8,
-  border: "1px solid #ccc",
-}
-
-const button = {
-  padding: "14px",
-  fontSize: 16,
-  borderRadius: 8,
-  border: "none",
-  background: "#4f46e5",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: "bold",
 }

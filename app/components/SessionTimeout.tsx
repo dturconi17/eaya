@@ -126,10 +126,14 @@ export default function SessionTimeout() {
     useEffect(() => {
 
 
-        if (loading || !user) {
+        if (loading) {
             return
         }
 
+        if (!user) {
+            clearTimers()
+            return
+        }
 
 
         const checkExpiration = () => {

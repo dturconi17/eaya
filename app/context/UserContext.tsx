@@ -33,11 +33,13 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         return
       }
 
+      console.log("FETCH PROFILE:", user.email)
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle()
+      
 
       if (error) throw error
 
@@ -50,69 +52,81 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       setProfile(data)
       setRole(data.role)
     } catch (err) {
-      console.error(err)
-      setProfile(null)
-      setRole(null)
-    }
+  console.error("Error cargando perfil:", err)
+}
   }
 
   const refreshProfile = async () => {
     if (user) {
       await fetchProfile(user)
     }
+
   }
 
-  useEffect(() => {
-    let mounted = true
 
-    const init = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+  
+ useEffect(() => {
+  let mounted = true
 
-        if (!mounted) return
+  const init = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
-        const currentUser = session?.user ?? null
+    if (!mounted) return
 
-        setUser(currentUser)
+    const currentUser = session?.user ?? null
 
+    setUser(currentUser)
+
+    if (currentUser) {
+      await fetchProfile(currentUser)
+    }
+
+    if (mounted) {
+      setLoading(false)
+    }
+  }
+
+  init()
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange(
+    async (event, session) => {
+
+      console.log("AUTH EVENT:", event)
+
+      if (!mounted) return
+
+      const currentUser = session?.user ?? null
+
+      setUser(currentUser)
+
+      if (event === "SIGNED_OUT") {
+        setProfile(null)
+        setRole(null)
+        setLoading(false)
+        return
+      }
+
+      if (
+        event === "SIGNED_IN" ||
+        event === "TOKEN_REFRESHED"
+      ) {
         if (currentUser) {
           await fetchProfile(currentUser)
         }
-      } catch (e) {
-        console.error("Error inicializando usuario:", e)
-      } finally {
-        if (mounted) {
-          setLoading(false)
-        }
       }
     }
+  )
 
-    init()
+  return () => {
+    mounted = false
+    subscription.unsubscribe()
+  }
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        const currentUser = session?.user ?? null
-
-        if (!mounted) return
-
-        setUser(currentUser)
-
-        if (currentUser) {
-          await fetchProfile(currentUser)
-        } else {
-          setProfile(null)
-          setRole(null)
-        }
-      }
-    )
-
-    return () => {
-      mounted = false
-      listener.subscription.unsubscribe()
-    }
-  }, [])
+}, [])
 
   return (
     <UserContext.Provider value={{ user, profile, role, loading, refreshProfile }}>

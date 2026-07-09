@@ -4,7 +4,7 @@ import { SidebarMenu } from "@/app/components/SidebarMenu"
 import { useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useUser } from "@/app/context/UserContext"
-
+import SessionTimeout from "@/app/components/SessionTimeout"
 
 export default function CRMLayout({
   children,
@@ -16,42 +16,30 @@ export default function CRMLayout({
 
   const { user, profile, loading } = useUser()
 
+  useEffect(() => {
+    if (loading) return
 
- useEffect(() => {
-  if (loading) return
+    if (!user) {
+      router.replace("/login")
+      return
+    }
 
-  if (!user) {
-    router.replace("/login")
-    return
-  }
+    if (pathname === "/completar-perfil") {
+      return
+    }
 
-  if (pathname === "/completar-perfil") {
-    return
-  }
-
-  const nombreInvalido =
-    !profile ||
-    !profile.full_name ||
-    profile.full_name === profile.email
-
-  if (nombreInvalido) {
-    router.replace("/completar-perfil")
-  }
-}, [loading, pathname, profile, router, user])
-
-const checking =
-  loading ||
-  !user ||
-  (
-    pathname !== "/completar-perfil" &&
-    (
+    const nombreInvalido =
       !profile ||
       !profile.full_name ||
       profile.full_name === profile.email
-    )
-  )
 
-  if (loading || checking) {
+    if (nombreInvalido) {
+      router.replace("/completar-perfil")
+    }
+  }, [loading, pathname, profile, router, user])
+
+  // Mientras se verifica la sesión
+  if (loading) {
     return (
       <div style={loadingContainer}>
         <p style={{ color: "#64748b" }}>Cargando CRM...</p>
@@ -59,30 +47,48 @@ const checking =
     )
   }
 
+  // Esperando el redirect al login
+  if (!user) {
+    return null
+  }
+
+  // Esperando el redirect a completar perfil
+  if (
+    pathname !== "/completar-perfil" &&
+    (
+      !profile ||
+      !profile.full_name ||
+      profile.full_name === profile.email
+    )
+  ) {
+    return null
+  }
+
   return (
+    <>
+    <SessionTimeout />
     <div style={container}>
       {/* SIDEBAR */}
       <aside style={sidebar}>
-  
-  {/* 🔹 HEADER */}
-  <div style={logoContainer}>
-    <img src="/eaya.jfif" alt="Logo" style={logo} />
-    <h2 style={title}>CRM de EAYA</h2>
-    <p style={subtitle}>Panel de control</p>
-  </div>
+        {/* HEADER */}
+        <div style={logoContainer}>
+          <img src="/eaya.jfif" alt="Logo" style={logo} />
+          <h2 style={title}>CRM de EAYA</h2>
+          <p style={subtitle}>Panel de control</p>
+        </div>
 
-  {/* 🔹 MENÚ (SCROLLABLE) */}
-  <div style={menuContainer}>
-    <SidebarMenu />
-  </div>
-
-
-
-</aside>
+        {/* MENÚ */}
+        <div style={menuContainer}>
+          <SidebarMenu />
+        </div>
+      </aside>
 
       {/* CONTENIDO */}
-      <main style={content}>{children}</main>
+      <main style={content}>
+        {children}
+      </main>
     </div>
+    </>
   )
 }
 
@@ -106,7 +112,7 @@ const sidebar: React.CSSProperties = {
   flexShrink: 0,
 }
 
-/* HEADER SIDEBAR */
+/* HEADER */
 const logoContainer: React.CSSProperties = {
   padding: "18px 16px",
   textAlign: "center",

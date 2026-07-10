@@ -29,9 +29,11 @@ export default function CRMLayout({
     }
 
     const nombreInvalido =
-      !profile ||
-      !profile.full_name ||
-      profile.full_name === profile.email
+      profile &&
+      (
+        !profile.full_name ||
+        profile.full_name === profile.email
+      )
 
     if (nombreInvalido) {
       router.replace("/completar-perfil")
@@ -39,10 +41,12 @@ export default function CRMLayout({
   }, [loading, pathname, profile, router, user])
 
   // Mientras se verifica la sesión
-  if (loading) {
+  if (loading || (user && !profile)) {
     return (
       <div style={loadingContainer}>
-        <p style={{ color: "#64748b" }}>Cargando CRM...</p>
+        <p style={{ color: "#64748b" }}>
+          Cargando CRM...
+        </p>
       </div>
     )
   }
@@ -55,8 +59,8 @@ export default function CRMLayout({
   // Esperando el redirect a completar perfil
   if (
     pathname !== "/completar-perfil" &&
+    profile &&
     (
-      !profile ||
       !profile.full_name ||
       profile.full_name === profile.email
     )
@@ -64,30 +68,36 @@ export default function CRMLayout({
     return null
   }
 
+  console.log({
+    loading,
+    user: !!user,
+    profile,
+  })
+
   return (
     <>
-    <SessionTimeout />
-    <div style={container}>
-      {/* SIDEBAR */}
-      <aside style={sidebar}>
-        {/* HEADER */}
-        <div style={logoContainer}>
-          <img src="/eaya.jfif" alt="Logo" style={logo} />
-          <h2 style={title}>CRM de EAYA</h2>
-          <p style={subtitle}>Panel de control</p>
-        </div>
+      <SessionTimeout /> 
+      <div style={container}>
+        {/* SIDEBAR */}
+        <aside style={sidebar}>
+          {/* HEADER */}
+          <div style={logoContainer}>
+            <img src="/eaya.jfif" alt="Logo" style={logo} />
+            <h2 style={title}>CRM de EAYA</h2>
+            <p style={subtitle}>Panel de control</p>
+          </div>
 
-        {/* MENÚ */}
-        <div style={menuContainer}>
-          <SidebarMenu />
-        </div>
-      </aside>
+          {/* MENÚ */}
+          <div style={menuContainer}>
+            <SidebarMenu />
+          </div>
+        </aside>
 
-      {/* CONTENIDO */}
-      <main style={content}>
-        {children}
-      </main>
-    </div>
+        {/* CONTENIDO */}
+        <main style={content}>
+          {children}
+        </main>
+      </div>
     </>
   )
 }

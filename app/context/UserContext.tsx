@@ -1,138 +1,140 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
+import { supabase } from "@/lib/supabase";
 
 type UserContextType = {
-  user: any
-  profile: any
-  role: string | null // 👈 agregamos esto
-  loading: boolean
-  refreshProfile: () => Promise<void>
-}
+  user: any;
+  profile: any;
+  role: string | null;
+  loading: boolean;
+  refreshProfile: () => Promise<void>;
+};
 
 const UserContext = createContext<UserContextType>({
   user: null,
   profile: null,
   role: null,
   loading: true,
-  refreshProfile: async () => { },
-})
+  refreshProfile: async () => {},
+});
 
-export const UserProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
-  const [role, setRole] = useState<string | null>(null) // 👈 nuevo estado
-  const [loading, setLoading] = useState(true)
+export function UserProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (user: any) => {
-    try {
-      if (!user?.id) {
-        setProfile(null)
-        setRole(null)
-        return
-      }
+  const fetchProfile = useCallback(async (currentUser: any) => {
+    if (!currentUser?.id) {
+      setProfile(null);
+      setRole(null);
+      return;
+    }
 
-      console.log("FETCH PROFILE:", user.email)
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle()
-      
+    console.log("Cargando profile:", currentUser.email);
 
-      if (error) throw error
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", currentUser.id)
+      .maybeSingle();
 
-      if (!data) {
-        setProfile(null)
-        setRole(null)
-        return
-      }
+    if (error) {
+      console.error("Error obteniendo profile:", error);
+      return;
+    }
 
-      setProfile(data)
-      setRole(data.role)
-    } catch (err) {
-  console.error("Error cargando perfil:", err)
-}
-  }
+    setProfile(data);
+    setRole(data?.role ?? null);
+  }, []);
 
   const refreshProfile = async () => {
     if (user) {
-      await fetchProfile(user)
+      await fetchProfile(user);
     }
+  };
 
-  }
+  // ==========================
+  // Cargar sesión inicial
+  // ==========================
 
+  useEffect(() => {
+    const loadSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-  
- useEffect(() => {
-  let mounted = true
+      setUser(session?.user ?? null);
 
-  const init = async () => {
+      setLoading(false);
+    };
+
+    loadSession();
+  }, []);
+
+  // ==========================
+  // Escuchar cambios de auth
+  // ==========================
+
+  useEffect(() => {
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!mounted) return
-
-    const currentUser = session?.user ?? null
-
-    setUser(currentUser)
-
-    if (currentUser) {
-      await fetchProfile(currentUser)
-    }
-
-    if (mounted) {
-      setLoading(false)
-    }
-  }
-
-  init()
-
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange(
-    async (event, session) => {
-
-      console.log("AUTH EVENT:", event)
-
-      if (!mounted) return
-
-      const currentUser = session?.user ?? null
-
-      setUser(currentUser)
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("AUTH:", event);
 
       if (event === "SIGNED_OUT") {
-        setProfile(null)
-        setRole(null)
-        setLoading(false)
-        return
+        setUser(null);
+        setProfile(null);
+        setRole(null);
+        return;
       }
 
-      if (
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED"
-      ) {
-        if (currentUser) {
-          await fetchProfile(currentUser)
-        }
-      }
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // ==========================
+  // Cuando cambia el usuario
+  // ==========================
+
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      setRole(null);
+      return;
     }
-  )
 
-  return () => {
-    mounted = false
-    subscription.unsubscribe()
-  }
-
-}, [])
+    fetchProfile(user);
+  }, [user, fetchProfile]);
 
   return (
-    <UserContext.Provider value={{ user, profile, role, loading, refreshProfile }}>
+    <UserContext.Provider
+      value={{
+        user,
+        profile,
+        role,
+        loading,
+        refreshProfile,
+      }}
+    >
       {children}
     </UserContext.Provider>
-  )
+  );
 }
 
-export const useUser = () => useContext(UserContext)
+export const useUser = () => useContext(UserContext);

@@ -71,7 +71,7 @@ export default function LoginPage() {
       console.log("REDIRECT A /inicio");
 
       router.replace("/inicio");
-      router.refresh();
+      
     } catch (err) {
       console.timeEnd("LOGIN");
       console.error("Error inesperado:", err);

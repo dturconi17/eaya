@@ -22,44 +22,44 @@ export default function UsersPage() {
   const router = useRouter();
 
   const [users, setUsers] = useState<Profile[]>([]);
-const [supervisores, setSupervisores] = useState<Profile[]>([]);
-const [savingId, setSavingId] = useState<string | null>(null);
-const [deletingId, setDeletingId] = useState<string | null>(null);
-const [search, setSearch] = useState("");
-const [page, setPage] = useState(1);
+  const [supervisores, setSupervisores] = useState<Profile[]>([]);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-const PAGE_SIZE = 3;
+  const PAGE_SIZE = 3;
 
-const filteredUsers = users.filter((u) => {
-  const text = search.toLowerCase();
+  const filteredUsers = users.filter((u) => {
+    const text = search.toLowerCase();
 
-  return (
-    (u.full_name ?? "").toLowerCase().includes(text) ||
-    u.email.toLowerCase().includes(text)
+    return (
+      (u.full_name ?? "").toLowerCase().includes(text) ||
+      u.email.toLowerCase().includes(text)
+    );
+  });
+
+  const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
+
+  const paginatedUsers = filteredUsers.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
   );
-});
 
-const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    full_name: "",
+    role: "vendedor",
+  });
 
-const paginatedUsers = filteredUsers.slice(
-  (page - 1) * PAGE_SIZE,
-  page * PAGE_SIZE
-);
+  const [creating, setCreating] = useState(false);
 
-const [form, setForm] = useState({
-  email: "",
-  password: "",
-  full_name: "",
-  role: "vendedor",
-});
-
-const [creating, setCreating] = useState(false);
-
-useEffect(() => {
-  if (!loading && role !== "admin") {
-    router.push("/no-access");
-  }
-}, [loading, role, router]);
+  useEffect(() => {
+    if (!loading && role !== "admin") {
+      router.push("/no-access");
+    }
+  }, [loading, role, router]);
 
   const fetchUsers = async () => {
     const { data, error } = await supabase
@@ -68,6 +68,9 @@ useEffect(() => {
         "id, email, full_name, role, supervisor_id, sexo, fecha_nacimiento"
       )
       .order("full_name");
+
+    console.log("DATA:", data)
+    console.log("ERROR:", error)
 
     if (error) {
       console.error("Error trayendo usuarios:", error);
@@ -78,21 +81,21 @@ useEffect(() => {
     setSupervisores((data || []).filter((u) => u.role === "supervisor"));
   };
 
-useEffect(() => {
-  const loadUsers = async () => {
-    await fetchUsers();
-  };
+  useEffect(() => {
+    const loadUsers = async () => {
+      await fetchUsers();
+    };
     const newTotalPages = Math.ceil((filteredUsers.length - 1) / PAGE_SIZE);
 
     if (page > newTotalPages && page > 1) {
       setPage(page - 1);
     }
-  loadUsers();
-}, []);
+    loadUsers();
+  }, []);
 
-useEffect(() => {
-  setPage(1);
-}, [search]);
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   const updateRole = async (userId: string, newRole: string) => {
     setSavingId(userId);
@@ -167,67 +170,67 @@ useEffect(() => {
 
       alert("Usuario creado correctamente");
 
-} catch (err: unknown) {
-  console.error(err);
+    } catch (err: unknown) {
+      console.error(err);
 
-  if (err instanceof Error) {
-    alert(err.message);
-  } else {
-    alert("Ocurrió un error inesperado");
-  }
-} finally {
+      if (err instanceof Error) {
+        alert(err.message);
+      } else {
+        alert("Ocurrió un error inesperado");
+      }
+    } finally {
       setCreating(false);
     }
   };
 
-const deleteUser = async (selectedUser: Profile) => {
+  const deleteUser = async (selectedUser: Profile) => {
 
-  if (selectedUser.id === user?.id) {
-    alert("No podés eliminar tu propio usuario.");
-    return;
-  }
-
-  const ok = confirm(
-    `¿Está seguro que desea eliminar a ${selectedUser.full_name || selectedUser.email}?`
-  );
-
-  if (!ok) return;
-
-setDeletingId(selectedUser.id);
-
-try {
-  const res = await fetch("/api/admin/delete-user", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: selectedUser.id,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || "No se pudo eliminar el usuario");
+    if (selectedUser.id === user?.id) {
+      alert("No podés eliminar tu propio usuario.");
+      return;
     }
 
-    await fetchUsers();
+    const ok = confirm(
+      `¿Está seguro que desea eliminar a ${selectedUser.full_name || selectedUser.email}?`
+    );
 
-    alert("Usuario eliminado correctamente");
+    if (!ok) return;
 
-  }  catch (err) {
-  console.error(err);
+    setDeletingId(selectedUser.id);
 
-  if (err instanceof Error) {
-    alert(err.message);
-  } else {
-    alert("Error eliminando usuario");
+    try {
+      const res = await fetch("/api/admin/delete-user", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: selectedUser.id,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo eliminar el usuario");
+      }
+
+      await fetchUsers();
+
+      alert("Usuario eliminado correctamente");
+
+    } catch (err) {
+      console.error(err);
+
+      if (err instanceof Error) {
+        alert(err.message);
+      } else {
+        alert("Error eliminando usuario");
+      }
+    } finally {
+      setDeletingId(null);
+    };
   }
-} finally {
-  setDeletingId(null);
-};
-}
   if (loading || role !== "admin") {
     return <p style={{ padding: 20 }}>Cargando...</p>;
   }
@@ -387,36 +390,36 @@ try {
         </table>
       </div>
       <div
-  style={{
-    display: "flex",
-    justifyContent: "space-between",
-    marginTop: 20,
-    alignItems: "center",
-  }}
->
-  <button
-    disabled={page === 1}
-    onClick={() => setPage(page - 1)}
-    style={button}
-  >
-    Anterior
-  </button>
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginTop: 20,
+          alignItems: "center",
+        }}
+      >
+        <button
+          disabled={page === 1}
+          onClick={() => setPage(page - 1)}
+          style={button}
+        >
+          Anterior
+        </button>
 
-  <span>
-    Página {page} de {totalPages || 1}
-  </span>
+        <span>
+          Página {page} de {totalPages || 1}
+        </span>
 
-  <button
-    disabled={page === totalPages || totalPages === 0}
-    onClick={() => setPage(page + 1)}
-    style={button}
-  >
-    Siguiente
-  </button>
-</div>
+        <button
+          disabled={page === totalPages || totalPages === 0}
+          onClick={() => setPage(page + 1)}
+          style={button}
+        >
+          Siguiente
+        </button>
+      </div>
     </div>
 
-    
+
   );
 }
 

@@ -1,307 +1,166 @@
-"use client"
+"use client";
 
-import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
-import { useUser } from "@/app/context/UserContext"
-import SessionTimeoutModal from "@/app/components/SessionTimeoutModal"
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useUser } from "@/app/context/UserContext";
+import SessionTimeoutModal from "@/app/components/SessionTimeoutModal";
 import {
-    SESSION_TIMEOUT,
-    SESSION_WARNING,
-} from "@/lib/config"
+  SESSION_TIMEOUT,
+  SESSION_WARNING,
+} from "@/lib/config";
 
-
-const STORAGE_KEY = "crm_session_activity"
-
+const STORAGE_KEY = "crm_session_activity";
 
 export default function SessionTimeout() {
 
-    const router = useRouter()
+  const { user, loading } = useUser();
 
-    const { user, loading } = useUser()
+  const expiresAt = useRef(0);
+  const showModalRef = useRef(false);
+  const logoutRunning = useRef(false);
+  const lastWrite = useRef(0);
 
+  const [showModal, setShowModal] = useState(false);
+  const [seconds, setSeconds] = useState(
+    Math.floor(SESSION_WARNING / 1000)
+  );
 
-    const expiresAt = useRef<number | null>(null)
+  useEffect(() => {
+    showModalRef.current = showModal;
+  }, [showModal]);
 
-    const countdown = useRef<NodeJS.Timeout | null>(null)
+  useEffect(() => {
+    if (!user) {
+      expiresAt.current = 0;
+      setShowModal(false);
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, [user]);
 
-    const [showModal, setShowModal] = useState(false)
+  const logout = async () => {
+    if (logoutRunning.current) return;
 
-    const [seconds, setSeconds] = useState(
-        Math.floor(SESSION_WARNING / 1000)
-    )
+    logoutRunning.current = true;
 
-    const loggingOut = useRef(false)
+    try {
+      localStorage.removeItem(STORAGE_KEY);
 
+      await supabase.auth.signOut();
 
+      
+    } finally {
+      logoutRunning.current = false;
+    }
+  };
 
-    const clearTimers = () => {
+  const renewSession = () => {
+    const now = Date.now();
 
-        if (countdown.current) {
-            clearInterval(countdown.current)
-            countdown.current = null
-        }
+    // evita escribir cientos de veces por segundo
+    if (now - lastWrite.current < 1000) return;
 
+    lastWrite.current = now;
+
+    expiresAt.current = now + SESSION_TIMEOUT;
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      expiresAt.current.toString()
+    );
+  };
+
+  useEffect(() => {
+    if (loading || !user) return;
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (saved) {
+      expiresAt.current = Number(saved);
+    } else {
+      renewSession();
     }
 
+    const activity = () => {
+      if (!showModalRef.current) {
+        renewSession();
+      }
+    };
 
+    const storage = (e: StorageEvent) => {
+      if (
+        e.key === STORAGE_KEY &&
+        e.newValue
+      ) {
+        expiresAt.current = Number(e.newValue);
+      }
+    };
 
-    const logout = async () => {
+    const events = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "click",
+    ];
 
-        if (loggingOut.current) return
+    events.forEach((e) =>
+      window.addEventListener(e, activity, {
+        passive: true,
+      })
+    );
 
-        loggingOut.current = true
+    window.addEventListener("storage", storage);
 
-        clearTimers()
+    return () => {
+      events.forEach((e) =>
+        window.removeEventListener(e, activity)
+      );
 
-        localStorage.removeItem(STORAGE_KEY)
+      window.removeEventListener(
+        "storage",
+        storage
+      );
+    };
+  }, [loading, user]);
 
-        await supabase.auth.signOut()
+  useEffect(() => {
+    if (loading || !user) return;
 
-        router.replace("/login")
+    const timer = window.setInterval(() => {
+      const remaining =
+        expiresAt.current - Date.now();
 
-    }
-
-
-
-    const startWarning = () => {
-        if (showModal) return
-
-        setShowModal(true)
-
-        setSeconds(Math.floor(SESSION_WARNING / 1000))
-
-        clearTimers()
-
-        countdown.current = setInterval(() => {
-
-            setSeconds((prev) => {
-
-                if (prev <= 1) {
-                    clearTimers()
-                    logout()
-                    return 0
-                }
-
-                return prev - 1
-            })
-
-        }, 1000)
-    }
-
-
-
-    const resetSession = () => {
-
-
-        if (showModal) return
-
-
-        expiresAt.current =
-            Date.now() +
-            SESSION_TIMEOUT
-
-
-        localStorage.setItem(
-            STORAGE_KEY,
-            expiresAt.current.toString()
-        )
-
-    }
-
-
-
-    const continueWorking = () => {
-
-        setShowModal(false)
-
-        clearTimers()
-
-        resetSession()
-
-    }
-
-
-
-    useEffect(() => {
-
-
-        if (loading) {
-            return
+      if (
+        remaining <= SESSION_WARNING &&
+        remaining > 0
+      ) {
+        if (!showModalRef.current) {
+          setShowModal(true);
         }
 
-        if (!user) {
-            clearTimers()
-            return
-        }
-
-
-        const checkExpiration = () => {
-
-
-            if (!expiresAt.current) {
-                return
-            }
-
-
-            const remaining =
-                expiresAt.current -
-                Date.now()
-
-
-
-            if (
-                remaining <= SESSION_WARNING
-                &&
-                remaining > 0
-            ) {
-
-                startWarning()
-
-            }
-
-
-            if (remaining <= 0) {
-
-                logout()
-
-            }
-
-        }
-
-
-
-        const events = [
-            "mousemove",
-            "mousedown",
-            "keydown",
-            "scroll",
-            "touchstart",
-            "click",
-        ]
-
-
-
-        const activity = () => {
-
-            if (!showModal) {
-                resetSession()
-            }
-
-        }
-
-
-
-        events.forEach(event => {
-            window.addEventListener(
-                event,
-                activity
-            )
-        })
-
-
-
-        const saved =
-            localStorage.getItem(
-                STORAGE_KEY
-            )
-
-
-        if (saved) {
-
-            expiresAt.current =
-                Number(saved)
-
-        } else {
-
-            resetSession()
-
-        }
-        console.log(
-            "Expira:",
-            new Date(expiresAt.current!)
-        )
-
-        const interval =
-            setInterval(
-                checkExpiration,
-                1000
-            )
-
-
-
-        const storageListener =
-            (event: StorageEvent) => {
-
-
-                if (
-                    event.key !== STORAGE_KEY
-                    ||
-                    !event.newValue
-                ) {
-                    return
-                }
-
-
-                expiresAt.current =
-                    Number(event.newValue)
-
-
-                setShowModal(false)
-
-            }
-
-
-
-        window.addEventListener(
-            "storage",
-            storageListener
-        )
-
-
-
-        return () => {
-
-
-            events.forEach(event => {
-
-                window.removeEventListener(
-                    event,
-                    activity
-                )
-
-            })
-
-
-            window.removeEventListener(
-                "storage",
-                storageListener
-            )
-
-
-            clearInterval(interval)
-
-            clearTimers()
-
-        }
-
-
-
-    }, [loading, user])
-
-
-
-    if (!showModal) {
-        return null
-    }
-
-
-
-    return (
-        <SessionTimeoutModal
-            seconds={seconds}
-            onContinue={continueWorking}
-            onLogout={logout}
-        />
-    )
+        setSeconds(Math.ceil(remaining / 1000));
+      }
+
+      if (remaining <= 0) {
+        logout();
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [loading, user]);
+
+const continueWorking = () => {
+  renewSession();
+  setShowModal(false);
+};
+
+  if (!showModal) return null;
+
+  return (
+    <SessionTimeoutModal
+      seconds={seconds}
+      onContinue={continueWorking}
+      onLogout={logout}
+    />
+  );
 }

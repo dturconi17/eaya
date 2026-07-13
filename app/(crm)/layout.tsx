@@ -82,7 +82,7 @@ export default function CRMLayout({
         <aside style={sidebar}>
           {/* HEADER */}
           <div style={logoContainer}>
-            <img src="/eaya.jfif" alt="Logo" style={logo} />
+            <img src="/eaya.png" alt="Logo" style={logo} />
             <h2 style={title}>CRM de EAYA</h2>
             <p style={subtitle}>Panel de control</p>
           </div>
@@ -130,10 +130,11 @@ const logoContainer: React.CSSProperties = {
 }
 
 const logo: React.CSSProperties = {
-  height: "56px",
-  width: "56px",
-  objectFit: "cover",
-  borderRadius: "12px",
+  maxWidth: "180px",
+  maxHeight: "70px",
+  width: "auto",
+  height: "auto",
+  objectFit: "contain",
   marginBottom: "10px",
 }
 

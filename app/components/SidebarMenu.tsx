@@ -43,7 +43,7 @@ const menuSections = [
     title: "⚙️ Administración",
     key: "admin",
     roles: ["admin"],
-    items: [{ href: "/users", label: "Usuarios" }],
+    items: [{ href: "/users", label: "1. Usuarios" }],
   },
 ];
 

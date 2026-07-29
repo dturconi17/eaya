@@ -39,6 +39,16 @@ const menuSections = [
       { href: "/clientes/nuevo", label: "1. Carga de Clientes" },
     ],
   },
+    {
+    title: "⚙️ Configuracion",
+    key: "configuracion",
+    roles: ["admin"],
+    items: [
+      { href: "/configuracion/empresas", label: "1. Empresas" },
+      { href: "/configuracion/productos", label: "2. Productos" },
+      { href: "/configuracion/intereses/preguntas", label: "3. Preguntas Generales" },
+    ],
+  },
   {
     title: "⚙️ Administración",
     key: "admin",

@@ -24,6 +24,9 @@ type Empresa = {
   contacto_comercial: string | null;
   telefono_contacto: string | null;
   email_contacto: string | null;
+  logo_url: string | null;
+  email_atencion_cliente: string | null;
+  telefono_atencion_cliente: string | null;
   activo: boolean;
   created_by: string | null;
   updated_by: string | null;
@@ -39,6 +42,8 @@ type EmpresaFormData = {
   contacto_comercial: string;
   telefono_contacto: string;
   email_contacto: string;
+  email_atencion_cliente: string;
+  telefono_atencion_cliente: string;
   activo: boolean;
 };
 
@@ -56,6 +61,8 @@ const FORMULARIO_INICIAL: EmpresaFormData = {
   contacto_comercial: "",
   telefono_contacto: "",
   email_contacto: "",
+  email_atencion_cliente: "",
+  telefono_atencion_cliente: "",
   activo: true,
 };
 
@@ -137,6 +144,8 @@ export default function EmpresasPage() {
 
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
+  const [logoArchivo, setLogoArchivo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState("");
 
   /* =======================================================
      CARGAR EMPRESAS
@@ -232,6 +241,8 @@ export default function EmpresasPage() {
       fecha_inicio_relacion: fechaActualISO(),
     });
 
+    setLogoArchivo(null);
+    setLogoPreview("");
     setError("");
     setMensaje("");
     setModalAbierto(true);
@@ -257,9 +268,15 @@ export default function EmpresasPage() {
         empresa.telefono_contacto ?? "",
       email_contacto:
         empresa.email_contacto ?? "",
+      email_atencion_cliente:
+        empresa.email_atencion_cliente ?? "",
+      telefono_atencion_cliente:
+        empresa.telefono_atencion_cliente ?? "",
       activo: empresa.activo,
     });
 
+    setLogoArchivo(null);
+    setLogoPreview(empresa.logo_url ?? "");
     setError("");
     setMensaje("");
     setModalAbierto(true);
@@ -273,6 +290,8 @@ export default function EmpresasPage() {
     setModalAbierto(false);
     setEmpresaEditando(null);
     setFormulario(FORMULARIO_INICIAL);
+    setLogoArchivo(null);
+    setLogoPreview("");
     setError("");
   }
 
@@ -300,6 +319,59 @@ export default function EmpresasPage() {
       fecha_fin_relacion: valor,
       activo: valor ? false : actual.activo,
     }));
+  }
+
+  function manejarLogoSeleccionado(archivo?: File) {
+    if (!archivo) {
+      setLogoArchivo(null);
+      setLogoPreview(empresaEditando?.logo_url ?? "");
+      return;
+    }
+
+    const tiposPermitidos = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/svg+xml",
+    ];
+
+    if (!tiposPermitidos.includes(archivo.type)) {
+      setError("El logo debe ser PNG, JPG, WEBP o SVG.");
+      return;
+    }
+
+    if (archivo.size > 2 * 1024 * 1024) {
+      setError("El logo no puede superar los 2 MB.");
+      return;
+    }
+
+    setError("");
+    setLogoArchivo(archivo);
+    setLogoPreview(URL.createObjectURL(archivo));
+  }
+
+  async function subirLogoEmpresa(archivo: File) {
+    const extension = archivo.name.split(".").pop()?.toLowerCase() || "png";
+    const nombreSeguro = limpiarCuit(formulario.cuit) || "empresa";
+    const ruta = `${nombreSeguro}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("logos-empresas")
+      .upload(ruta, archivo, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: archivo.type,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("logos-empresas")
+      .getPublicUrl(ruta);
+
+    return data.publicUrl;
   }
 
   /* =======================================================
@@ -338,6 +410,10 @@ export default function EmpresasPage() {
       return "Ingresá un email de contacto válido.";
     }
 
+    if (!emailValido(formulario.email_atencion_cliente)) {
+      return "Ingresá un email de atención al cliente válido.";
+    }
+
     return null;
   }
 
@@ -373,6 +449,11 @@ export default function EmpresasPage() {
       setMensaje("");
 
       const cuitLimpio = limpiarCuit(formulario.cuit);
+      let logoUrl = empresaEditando?.logo_url ?? null;
+
+      if (logoArchivo) {
+        logoUrl = await subirLogoEmpresa(logoArchivo);
+      }
 
       /*
        * Buscamos el CUIT antes de guardar para mostrar
@@ -423,6 +504,13 @@ export default function EmpresasPage() {
           formulario.email_contacto
             .trim()
             .toLowerCase() || null,
+        logo_url: logoUrl,
+        email_atencion_cliente:
+          formulario.email_atencion_cliente
+            .trim()
+            .toLowerCase() || null,
+        telefono_atencion_cliente:
+          formulario.telefono_atencion_cliente.trim() || null,
         activo: formulario.fecha_fin_relacion
           ? false
           : formulario.activo,
@@ -460,6 +548,8 @@ export default function EmpresasPage() {
       setModalAbierto(false);
       setEmpresaEditando(null);
       setFormulario(FORMULARIO_INICIAL);
+      setLogoArchivo(null);
+      setLogoPreview("");
     } catch (err: any) {
       console.error("Error guardando empresa:", err);
 
@@ -763,15 +853,33 @@ export default function EmpresasPage() {
                   {empresasFiltradas.map((empresa) => (
                     <tr key={empresa.id}>
                       <td style={styles.td}>
-                        <div style={styles.companyName}>
-                          {empresa.nombre}
-                        </div>
-
-                        {empresa.email_contacto && (
-                          <div style={styles.secondaryText}>
-                            {empresa.email_contacto}
+                        <div style={styles.companyCell}>
+                          <div style={styles.logoTableBox}>
+                            {empresa.logo_url ? (
+                              <img
+                                src={empresa.logo_url}
+                                alt={`Logo de ${empresa.nombre}`}
+                                style={styles.logoTableImage}
+                              />
+                            ) : (
+                              <span style={styles.logoPlaceholder}>
+                                {empresa.nombre.charAt(0).toUpperCase()}
+                              </span>
+                            )}
                           </div>
-                        )}
+
+                          <div>
+                            <div style={styles.companyName}>
+                              {empresa.nombre}
+                            </div>
+
+                            {empresa.email_atencion_cliente && (
+                              <div style={styles.secondaryText}>
+                                {empresa.email_atencion_cliente}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       <td style={styles.td}>
@@ -799,6 +907,12 @@ export default function EmpresasPage() {
                         {empresa.telefono_contacto && (
                           <div style={styles.secondaryText}>
                             {empresa.telefono_contacto}
+                          </div>
+                        )}
+
+                        {empresa.telefono_atencion_cliente && (
+                          <div style={styles.customerServiceText}>
+                            Atención: {empresa.telefono_atencion_cliente}
                           </div>
                         )}
                       </td>
@@ -1094,6 +1208,96 @@ export default function EmpresasPage() {
                     disabled={guardando}
                   />
                 </div>
+
+                <div style={styles.sectionTitle}>
+                  Atención al cliente
+                </div>
+
+                <div style={styles.field}>
+                  <label style={styles.label}>
+                    Email de atención al cliente
+                  </label>
+
+                  <input
+                    type="email"
+                    value={formulario.email_atencion_cliente}
+                    onChange={(evento) =>
+                      actualizarCampo(
+                        "email_atencion_cliente",
+                        evento.target.value
+                      )
+                    }
+                    maxLength={150}
+                    placeholder="atencion@empresa.com"
+                    style={styles.input}
+                    disabled={guardando}
+                  />
+                </div>
+
+                <div style={styles.field}>
+                  <label style={styles.label}>
+                    Teléfono de atención al cliente
+                  </label>
+
+                  <input
+                    type="tel"
+                    value={formulario.telefono_atencion_cliente}
+                    onChange={(evento) =>
+                      actualizarCampo(
+                        "telefono_atencion_cliente",
+                        evento.target.value
+                      )
+                    }
+                    maxLength={50}
+                    placeholder="0800-000-0000"
+                    style={styles.input}
+                    disabled={guardando}
+                  />
+                </div>
+
+                <div style={styles.sectionTitle}>
+                  Identidad visual
+                </div>
+
+                <div style={styles.fullField}>
+                  <label style={styles.label}>
+                    Logo de la empresa
+                  </label>
+
+                  <div style={styles.logoUploadRow}>
+                    <div style={styles.logoPreviewBox}>
+                      {logoPreview ? (
+                        <img
+                          src={logoPreview}
+                          alt="Vista previa del logo"
+                          style={styles.logoPreviewImage}
+                        />
+                      ) : (
+                        <span style={styles.logoPreviewEmpty}>
+                          Sin logo
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={styles.logoUploadControls}>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        onChange={(evento) =>
+                          manejarLogoSeleccionado(
+                            evento.target.files?.[0]
+                          )
+                        }
+                        disabled={guardando}
+                        style={styles.fileInput}
+                      />
+
+                      <span style={styles.fieldHelp}>
+                        PNG, JPG, WEBP o SVG. Máximo 2 MB.
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {error && (
@@ -1249,6 +1453,39 @@ const styles: Record<string, React.CSSProperties> = {
     verticalAlign: "middle",
   },
 
+  companyCell: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  },
+
+  logoTableBox: {
+    width: "42px",
+    height: "42px",
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    background: "#ffffff",
+  },
+
+  logoTableImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: "4px",
+    boxSizing: "border-box",
+  },
+
+  logoPlaceholder: {
+    color: "#475569",
+    fontSize: "17px",
+    fontWeight: 800,
+  },
+
   companyName: {
     color: "#0f172a",
     fontWeight: 700,
@@ -1258,6 +1495,13 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: "4px",
     color: "#64748b",
     fontSize: "12px",
+  },
+
+  customerServiceText: {
+    marginTop: "5px",
+    color: "#0369a1",
+    fontSize: "12px",
+    fontWeight: 600,
   },
 
   activeBadge: {
@@ -1485,6 +1729,62 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "7px",
+  },
+
+  sectionTitle: {
+    gridColumn: "1 / -1",
+    marginTop: "4px",
+    paddingTop: "16px",
+    borderTop: "1px solid #e2e8f0",
+    color: "#0f172a",
+    fontSize: "15px",
+    fontWeight: 800,
+  },
+
+  logoUploadRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "16px",
+    flexWrap: "wrap",
+  },
+
+  logoPreviewBox: {
+    width: "110px",
+    height: "80px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    border: "1px dashed #cbd5e1",
+    borderRadius: "12px",
+    background: "#f8fafc",
+  },
+
+  logoPreviewImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    padding: "8px",
+    boxSizing: "border-box",
+  },
+
+  logoPreviewEmpty: {
+    color: "#94a3b8",
+    fontSize: "12px",
+  },
+
+  logoUploadControls: {
+    flex: 1,
+    minWidth: "240px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "7px",
+  },
+
+  fileInput: {
+    width: "100%",
+    color: "#334155",
+    fontSize: "13px",
   },
 
   fieldHelp: {

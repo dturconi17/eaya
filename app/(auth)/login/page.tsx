@@ -2,328 +2,334 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Eye,
+  EyeOff,
+  KeyRound,
+  LogIn,
+  Mail,
+  ShieldCheck,
+  UserPlus,
+} from "lucide-react";
+
 import { supabase } from "@/lib/supabase";
+import styles from "./login.module.css";
+
+type Mode = "login" | "signup" | "reset";
+
+function En1ClicLogo({ compact = false }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <svg
+        className={styles.symbolLogo}
+        viewBox="0 0 56 56"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-label="EN1CLIC"
+      >
+        <rect x="22" y="4" width="11" height="36" rx="5.5" fill="#0057FF" />
+        <rect x="9" y="4" width="28" height="11" rx="5.5" fill="#0057FF" />
+        <rect x="9" y="40" width="32" height="11" rx="5.5" fill="#0057FF" />
+        <circle cx="46" cy="9" r="8" fill="#00C2A0" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      className={styles.fullLogo}
+      viewBox="0 0 500 160"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="EN1CLIC by EAYA"
+    >
+      <rect x="44" y="12" width="20" height="76" rx="10" fill="#0057FF" />
+      <rect x="20" y="12" width="56" height="20" rx="10" fill="#0057FF" />
+      <rect x="20" y="88" width="60" height="20" rx="10" fill="#0057FF" />
+      <circle cx="92" cy="20" r="14" fill="#00C2A0" />
+      <text x="128" y="84" fontFamily="Plus Jakarta Sans, Inter, sans-serif" fontWeight="800" fontSize="68" fill="#0A0F1E" letterSpacing="-2">
+        EN1CLIC
+      </text>
+      <text x="130" y="120" fontFamily="Plus Jakarta Sans, Inter, sans-serif" fontWeight="600" fontSize="22" fill="#94A3B8" letterSpacing="4">
+        by EAYA
+      </text>
+    </svg>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
-
+  const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nombre, setNombre] = useState("");
-
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const cambiarModo = (nuevoModo: "login" | "signup" | "reset") => {
+  function cambiarModo(nuevoModo: Mode) {
     setMode(nuevoModo);
     setError(null);
     setMessage(null);
-  };
 
-  // ================= LOGIN =================
+    if (nuevoModo === "reset") {
+      setPassword("");
+      setMostrarPassword(false);
+    }
+  }
 
-  const handleLogin = async () => {
-    console.log("CLICK LOGIN");
-
-    if (!email || !password) {
-      setError("Ingresá email y contraseña");
+  async function handleLogin() {
+    if (!email.trim() || !password) {
+      setError("Ingresá email y contraseña.");
       return;
     }
 
-    setLoading(true);
-    setError(null);
-
     try {
-      console.time("LOGIN");
+      setLoading(true);
+      setError(null);
+      setMessage(null);
 
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim().toLowerCase(),
         password,
       });
 
-      console.timeEnd("LOGIN");
-
-      console.log("LOGIN DATA:", data);
-      console.log("LOGIN ERROR:", error);
-
       if (error) {
         const msg = error.message.toLowerCase();
-
-        if (msg.includes("invalid")) {
-          setError("Email o contraseña incorrectos");
-        } else {
-          setError(error.message);
-        }
-
-        setLoading(false);
+        setError(
+          msg.includes("invalid") || msg.includes("credentials")
+            ? "El email o la contraseña son incorrectos."
+            : error.message
+        );
         return;
       }
 
       if (!data?.user) {
-        setError("No se pudo iniciar sesión");
-        setLoading(false);
+        setError("No fue posible iniciar sesión.");
         return;
       }
 
-      console.log("REDIRECT A /inicio");
-
       router.replace("/inicio");
-      
+      router.refresh();
     } catch (err) {
-      console.timeEnd("LOGIN");
-      console.error("Error inesperado:", err);
-
-      setError("Ocurrió un error inesperado.");
+      console.error("Error iniciando sesión:", err);
+      setError("Ocurrió un error inesperado al iniciar sesión.");
+    } finally {
       setLoading(false);
     }
-  };
+  }
 
-  // ================= SIGN UP =================
-
-  const handleSignUp = async () => {
-    setLoading(true);
-    setError(null);
-    setMessage(null);
-
-    if (!email || !password || !nombre) {
-      setError("Completá todos los campos");
-      setLoading(false);
+  async function handleSignUp() {
+    if (!email.trim() || !password || !nombre.trim()) {
+      setError("Completá todos los campos.");
       return;
     }
 
     try {
+      setLoading(true);
+      setError(null);
+      setMessage(null);
+
       const { error } = await supabase.auth.signUp({
-        email,
+        email: email.trim().toLowerCase(),
         password,
         options: {
-          data: {
-            full_name: nombre,
-          },
+          data: { full_name: nombre.trim() },
         },
       });
 
       if (error) {
         setError(error.message);
-        setLoading(false);
         return;
       }
 
-      // El trigger de Supabase crea automáticamente el profile.
-
-      setMessage("Usuario creado. Revisá tu email 📩");
+      setMessage("Usuario creado correctamente. Revisá tu email para continuar.");
     } catch (err) {
-      console.error(err);
-      setError("Error creando el usuario");
+      console.error("Error creando usuario:", err);
+      setError("No fue posible crear el usuario.");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  // ================= RESET PASSWORD =================
-
-  const handleResetPassword = async () => {
-    setLoading(true);
-    setError(null);
-    setMessage(null);
-
-    if (!email) {
-      setError("Ingresá tu email");
-      setLoading(false);
+  async function handleResetPassword() {
+    if (!email.trim()) {
+      setError("Ingresá tu email.");
       return;
     }
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      setLoading(true);
+      setError(null);
+      setMessage(null);
+
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email.trim().toLowerCase(),
+        { redirectTo: `${window.location.origin}/reset-password` }
+      );
 
       if (error) {
         setError(error.message);
-      } else {
-        setMessage("Te enviamos un email para recuperar contraseña 🔑");
+        return;
       }
+
+      setMessage("Te enviamos un email para recuperar tu contraseña.");
     } catch (err) {
-      console.error(err);
-      setError("Error recuperando contraseña");
+      console.error("Error recuperando contraseña:", err);
+      setError("No fue posible iniciar la recuperación de contraseña.");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  // ================= UI =================
+  async function ejecutarAccion() {
+    if (mode === "login") return handleLogin();
+    if (mode === "signup") return handleSignUp();
+    return handleResetPassword();
+  }
+
+  const titulo =
+    mode === "login"
+      ? "Bienvenido nuevamente"
+      : mode === "signup"
+      ? "Crear una cuenta"
+      : "Recuperar contraseña";
+
+  const descripcion =
+    mode === "login"
+      ? "Ingresá tus credenciales para acceder al CRM."
+      : mode === "signup"
+      ? "Registrá un nuevo usuario para comenzar."
+      : "Ingresá tu email y te enviaremos las instrucciones.";
+
+  const textoBoton =
+    loading
+      ? "Procesando..."
+      : mode === "login"
+      ? "Ingresar"
+      : mode === "signup"
+      ? "Crear cuenta"
+      : "Enviar email";
 
   return (
-    <div style={container}>
-      <div style={card}>
-        <h2 style={title}>
-          {mode === "login"
-            ? "Ingresar"
-            : mode === "signup"
-            ? "Crear cuenta"
-            : "Recuperar contraseña"}
-        </h2>
+    <main className={styles.page}>
+      <div className={styles.layout}>
+        <section className={styles.brandPanel}>
+          <div className={styles.brandContent}>
+            <div className={styles.desktopLogoWrap}>
+              <En1ClicLogo />
+            </div>
 
-        <div style={tabs}>
-          <button
-            onClick={() => cambiarModo("login")}
-            style={tab(mode === "login")}
-          >
-            Login
-          </button>
+            <div>
+              <div className={styles.brandEyebrow}>CRM COMERCIAL</div>
+              <h1 className={styles.brandTitle}>
+                Todo tu negocio,
+                <br />
+                en un clic.
+              </h1>
+              <p className={styles.brandText}>
+                Gestioná clientes, productos, operaciones y oportunidades
+                desde una única plataforma.
+              </p>
+            </div>
 
-          <button
-            onClick={() => cambiarModo("signup")}
-            style={tab(mode === "signup")}
-          >
-            Registro
-          </button>
+            <div className={styles.featureList}>
+              <div className={styles.featureItem}>
+                <div className={styles.featureIcon}><ShieldCheck size={18} /></div>
+                <span>Acceso seguro y gestión de permisos</span>
+              </div>
+              <div className={styles.featureItem}>
+                <div className={styles.featureIcon}><LogIn size={18} /></div>
+                <span>Journey comercial centralizado</span>
+              </div>
+              <div className={styles.featureItem}>
+                <div className={styles.featureIcon}><UserPlus size={18} /></div>
+                <span>Clientes, productos y oportunidades en un solo lugar</span>
+              </div>
+            </div>
+          </div>
 
-          <button
-            onClick={() => cambiarModo("reset")}
-            style={tab(mode === "reset")}
-          >
-            Reset
-          </button>
-        </div>
+          <div className={styles.brandFooter}>Una solución del ecosistema EAYA</div>
+        </section>
 
-        <form
-          style={form}
-          onSubmit={(e) => e.preventDefault()}
-        >
-          <input
-            style={input}
-            type="email"
-            placeholder="Email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        <section className={styles.formPanel}>
+          <div className={styles.formPanelInner}>
+            <div className={styles.mobileBrand}>
+              <En1ClicLogo compact />
+              <div className={styles.mobileBrandText}>
+                <strong>EN1CLIC</strong>
+                <span>by EAYA</span>
+              </div>
+            </div>
 
-          {mode === "signup" && (
-            <input
-              style={input}
-              type="text"
-              placeholder="Nombre completo"
-              autoComplete="name"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-            />
-          )}
+            <div className={styles.card}>
+              <div className={styles.header}>
+                <div className={styles.modeIcon}>
+                  {mode === "login" && <LogIn size={22} />}
+                  {mode === "signup" && <UserPlus size={22} />}
+                  {mode === "reset" && <KeyRound size={22} />}
+                </div>
+                <h2>{titulo}</h2>
+                <p>{descripcion}</p>
+              </div>
 
-          {mode !== "reset" && (
-            <input
-              style={input}
-              type="password"
-              placeholder="Password"
-              autoComplete={
-                mode === "login" ? "current-password" : "new-password"
-              }
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          )}
+              <div className={styles.tabs}>
+                <button type="button" className={mode === "login" ? styles.tabActive : styles.tab} onClick={() => cambiarModo("login")}>Ingresar</button>
+                <button type="button" className={mode === "signup" ? styles.tabActive : styles.tab} onClick={() => cambiarModo("signup")}>Registro</button>
+                <button type="button" className={mode === "reset" ? styles.tabActive : styles.tab} onClick={() => cambiarModo("reset")}>Recuperar</button>
+              </div>
 
-          <button
-            type="button"
-            style={button}
-            disabled={loading}
-            onClick={
-              mode === "login"
-                ? handleLogin
-                : mode === "signup"
-                ? handleSignUp
-                : handleResetPassword
-            }
-          >
-            {loading
-              ? "Procesando..."
-              : mode === "login"
-              ? "Ingresar"
-              : mode === "signup"
-              ? "Crear cuenta"
-              : "Enviar email"}
-          </button>
+              <form className={styles.form} onSubmit={(event) => { event.preventDefault(); ejecutarAccion(); }}>
+                {mode === "signup" && (
+                  <div className={styles.field}>
+                    <label>Nombre completo</label>
+                    <input type="text" placeholder="Ej. Juan Pérez" autoComplete="name" value={nombre} disabled={loading} onChange={(event) => setNombre(event.target.value)} />
+                  </div>
+                )}
 
-          {error && <p style={errorStyle}>{error}</p>}
-          {message && <p style={successStyle}>{message}</p>}
-        </form>
+                <div className={styles.field}>
+                  <label>Email</label>
+                  <div className={styles.inputWrapper}>
+                    <Mail size={18} className={styles.inputIcon} />
+                    <input type="email" placeholder="nombre@empresa.com" autoComplete="email" value={email} disabled={loading} className={styles.inputWithIcon} onChange={(event) => setEmail(event.target.value)} />
+                  </div>
+                </div>
+
+                {mode !== "reset" && (
+                  <div className={styles.field}>
+                    <label>Contraseña</label>
+                    <div className={styles.inputWrapper}>
+                      <KeyRound size={18} className={styles.inputIcon} />
+                      <input type={mostrarPassword ? "text" : "password"} placeholder="Ingresá tu contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} disabled={loading} className={styles.passwordInput} onChange={(event) => setPassword(event.target.value)} />
+                      <button type="button" className={styles.passwordToggle} onClick={() => setMostrarPassword((actual) => !actual)} aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}>
+                        {mostrarPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {error && <div className={styles.errorBox}>{error}</div>}
+                {message && <div className={styles.successBox}>{message}</div>}
+
+                <button type="submit" className={styles.primaryButton} disabled={loading}>
+                  {mode === "login" && <LogIn size={18} />}
+                  {mode === "signup" && <UserPlus size={18} />}
+                  {mode === "reset" && <Mail size={18} />}
+                  {textoBoton}
+                </button>
+
+                {mode === "login" && (
+                  <button type="button" className={styles.forgot} onClick={() => cambiarModo("reset")}>¿Olvidaste tu contraseña?</button>
+                )}
+              </form>
+            </div>
+
+            <div className={styles.formFooter}>Acceso exclusivo para usuarios autorizados.</div>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
-
-// ================= STYLES =================
-
-const container = {
-  minHeight: "100vh",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  background: "#f4f6f8",
-};
-
-const card = {
-  width: 400,
-  padding: 30,
-  borderRadius: 12,
-  background: "white",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
-};
-
-const title = {
-  fontSize: 24,
-  marginBottom: 20,
-};
-
-const tabs = {
-  display: "flex",
-  gap: 10,
-  marginBottom: 20,
-};
-
-const tab = (active: boolean) => ({
-  flex: 1,
-  padding: 10,
-  borderRadius: 8,
-  border: "none",
-  cursor: "pointer",
-  background: active ? "#4f46e5" : "#e5e7eb",
-  color: active ? "white" : "black",
-});
-
-const form = {
-  display: "flex",
-  flexDirection: "column" as const,
-  gap: 15,
-};
-
-const input = {
-  padding: "14px 16px",
-  fontSize: 16,
-  borderRadius: 8,
-  border: "1px solid #ccc",
-};
-
-const button = {
-  padding: "14px",
-  fontSize: 16,
-  borderRadius: 8,
-  border: "none",
-  background: "#4f46e5",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
-const errorStyle = {
-  color: "red",
-  fontSize: 14,
-};
-
-const successStyle = {
-  color: "green",
-  fontSize: 14,
-};

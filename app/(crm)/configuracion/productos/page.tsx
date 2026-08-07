@@ -12,7 +12,10 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useUser } from "@/app/context/UserContext";
 import { useRouter } from "next/navigation";
-import { MessageCircleQuestion } from "lucide-react";
+import {
+    MessageCircleQuestion,
+    ArrowUpDown,
+} from "lucide-react";
 
 /* =========================================================
    TIPOS
@@ -23,6 +26,12 @@ type Empresa = {
     nombre: string;
     cuit: string;
     activo: boolean;
+};
+
+type ProductoUpDown = {
+    producto_id: string;
+    producto_upgrade_id: string | null;
+    producto_downgrade_id: string | null;
 };
 
 type TipoComision = "one_shot" | "mensual";
@@ -408,7 +417,8 @@ function obtenerUrlFoto(fotoPath: string | null) {
 
 export default function ProductosPage() {
     const { user, role, loading: userLoading } = useUser();
-
+    const [configuracionesUpDown, setConfiguracionesUpDown] =
+        useState<Record<string, ProductoUpDown>>({});
     const [productos, setProductos] = useState<Producto[]>([]);
     const [empresas, setEmpresas] = useState<Empresa[]>([]);
 
@@ -498,6 +508,37 @@ export default function ProductosPage() {
         setProductos((data ?? []) as Producto[]);
     }, []);
 
+    const cargarConfiguracionesUpDown =
+        useCallback(async () => {
+            const { data, error: upDownError } =
+                await supabase
+                    .from("productos_up_down")
+                    .select(`
+                    producto_id,
+                    producto_upgrade_id,
+                    producto_downgrade_id
+                `);
+
+            if (upDownError) {
+                throw upDownError;
+            }
+
+            const mapa = (
+                (data ?? []) as ProductoUpDown[]
+            ).reduce<Record<string, ProductoUpDown>>(
+                (acumulador, configuracion) => {
+                    acumulador[
+                        configuracion.producto_id
+                    ] = configuracion;
+
+                    return acumulador;
+                },
+                {}
+            );
+
+            setConfiguracionesUpDown(mapa);
+        }, []);
+
     /* =======================================================
        CARGA INICIAL
     ======================================================= */
@@ -510,6 +551,7 @@ export default function ProductosPage() {
             await Promise.all([
                 cargarEmpresas(),
                 cargarProductos(),
+                cargarConfiguracionesUpDown(),
             ]);
         } catch (err) {
             console.error("Error cargando configuración:", err);
@@ -519,7 +561,11 @@ export default function ProductosPage() {
         } finally {
             setLoading(false);
         }
-    }, [cargarEmpresas, cargarProductos]);
+    }, [
+        cargarEmpresas,
+        cargarProductos,
+        cargarConfiguracionesUpDown,
+    ]);
 
     useEffect(() => {
         if (userLoading) {
@@ -1551,6 +1597,30 @@ export default function ProductosPage() {
         );
     }
 
+
+    function obtenerIndicadorUpDown(
+        productoId: string
+    ) {
+        const configuracion =
+            configuracionesUpDown[productoId];
+
+        if (!configuracion) {
+            return "";
+        }
+
+        const cantidadUp =
+            configuracion.producto_upgrade_id ? 1 : 0;
+
+        const cantidadDown =
+            configuracion.producto_downgrade_id ? 1 : 0;
+
+        if (cantidadUp === 0 && cantidadDown === 0) {
+            return "";
+        }
+
+        return ` (${cantidadUp}/${cantidadDown})`;
+    }
+
     /* =======================================================
        RENDER
     ======================================================= */
@@ -2027,6 +2097,21 @@ export default function ProductosPage() {
                                                     >
                                                         <MessageCircleQuestion size={12} />
                                                         Preguntas trigger
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            router.push(
+                                                                `/configuracion/productos/${producto.id}/up-down`
+                                                            )
+                                                        }
+                                                        style={styles.upDownButton}
+                                                        title="Upgrade / Downgrade configurados"
+                                                    >
+                                                        <ArrowUpDown size={12} />
+
+                                                        Up & Down
+                                                        {obtenerIndicadorUpDown(producto.id)}
                                                     </button>
                                                 </div>
                                             </td>
@@ -3655,5 +3740,19 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "12px",
         fontWeight: 400,
         lineHeight: 1.4,
+    },
+    upDownButton: {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "7px",
+        padding: "7px 11px",
+        border: "1px solid #a5b4fc",
+        borderRadius: "8px",
+        background: "#eef2ff",
+        color: "#4338ca",
+        cursor: "pointer",
+        fontSize: "12px",
+        fontWeight: 700,
     },
 };

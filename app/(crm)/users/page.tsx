@@ -1,502 +1,1008 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { useUser } from "@/app/context/UserContext";
+import {
+  ChangeEvent,
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  ChevronLeft,
+  ChevronRight,
+  Mail,
+  Pencil,
+  Plus,
+  Search,
+  ShieldCheck,
+  Trash2,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
+
 import { useRouter } from "next/navigation";
 
-const roles = ["admin", "gerente", "supervisor", "vendedor"];
+import { supabase } from "@/lib/supabase";
+import { useUser } from "@/app/context/UserContext";
+
+import styles from "./UsersPage.module.css";
+
+const ROLES = [
+  { value: "admin", label: "Administrador" },
+  { value: "gerente", label: "Gerente" },
+  { value: "supervisor", label: "Supervisor" },
+  { value: "vendedor", label: "Vendedor" },
+] as const;
+
+type Role = (typeof ROLES)[number]["value"];
 
 type Profile = {
   id: string;
   email: string;
   full_name: string | null;
-  role: string | null;
+  role: Role | null;
   supervisor_id: string | null;
   sexo: string | null;
   fecha_nacimiento: string | null;
+  avatar_url?: string | null;
 };
 
-export default function UsersPage() {
-  const { user, role, loading } = useUser();
-  const router = useRouter();
+type UserForm = {
+  email: string;
+  password: string;
+  full_name: string;
+  role: Role;
+};
 
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [supervisores, setSupervisores] = useState<Profile[]>([]);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+const INITIAL_FORM: UserForm = {
+  email: "",
+  password: "",
+  full_name: "",
+  role: "vendedor",
+};
+
+const PAGE_SIZE = 8;
+
+function formatDate(date: string | null) {
+  if (!date) {
+    return "Sin informar";
+  }
+
+  const parsed = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return date;
+  }
+
+  return parsed.toLocaleDateString("es-AR");
+}
+
+function getRoleLabel(role: string | null) {
+  return (
+    ROLES.find((option) => option.value === role)?.label ||
+    role ||
+    "Sin rol"
+  );
+}
+
+function getInitials(name: string | null, email: string) {
+  const base = name?.trim() || email.split("@")[0] || "U";
+
+  return base
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+}
+
+export default function UsersPage() {
+  const router = useRouter();
+  const { user, role, loading: userLoading } = useUser();
+
+  const [usersList, setUsersList] = useState<Profile[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"todos" | Role>(
+    "todos"
+  );
   const [page, setPage] = useState(1);
 
-  const PAGE_SIZE = 3;
-
-  const filteredUsers = users.filter((u) => {
-    const text = search.toLowerCase();
-
-    return (
-      (u.full_name ?? "").toLowerCase().includes(text) ||
-      u.email.toLowerCase().includes(text)
-    );
-  });
-
-  const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
-
-  const paginatedUsers = filteredUsers.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
-  );
-
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-    full_name: "",
-    role: "vendedor",
-  });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState<UserForm>(INITIAL_FORM);
 
   const [creating, setCreating] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(
+    null
+  );
+
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (!loading && role !== "admin") {
-      router.push("/no-access");
+    if (!userLoading && role !== "admin") {
+      router.replace("/no-access");
     }
-  }, [loading, role, router]);
+  }, [userLoading, role, router]);
 
-  const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(
-        "id, email, full_name, role, supervisor_id, sexo, fecha_nacimiento"
-      )
-      .order("full_name");
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoadingUsers(true);
+      setError("");
 
-    console.log("DATA:", data)
-    console.log("ERROR:", error)
+      const { data, error: usersError } = await supabase
+        .from("profiles")
+        .select(
+          `
+            id,
+            email,
+            full_name,
+            role,
+            supervisor_id,
+            sexo,
+            fecha_nacimiento,
+            avatar_url
+          `
+        )
+        .order("full_name", {
+          ascending: true,
+          nullsFirst: false,
+        });
 
-    if (error) {
-      console.error("Error trayendo usuarios:", error);
-      return;
+      if (usersError) {
+        throw usersError;
+      }
+
+      setUsersList((data ?? []) as Profile[]);
+    } catch (err) {
+      console.error("Error obteniendo usuarios:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible cargar los usuarios."
+      );
+    } finally {
+      setLoadingUsers(false);
     }
-
-    setUsers(data || []);
-    setSupervisores((data || []).filter((u) => u.role === "supervisor"));
-  };
-
-  useEffect(() => {
-    const loadUsers = async () => {
-      await fetchUsers();
-    };
-    const newTotalPages = Math.ceil((filteredUsers.length - 1) / PAGE_SIZE);
-
-    if (page > newTotalPages && page > 1) {
-      setPage(page - 1);
-    }
-    loadUsers();
   }, []);
 
   useEffect(() => {
-    setPage(1);
-  }, [search]);
-
-  const updateRole = async (userId: string, newRole: string) => {
-    setSavingId(userId);
-
-    await supabase.from("profiles").update({ role: newRole }).eq("id", userId);
-
-    if (newRole !== "vendedor") {
-      await supabase
-        .from("profiles")
-        .update({ supervisor_id: null })
-        .eq("id", userId);
-    }
-
-    await fetchUsers();
-    setSavingId(null);
-  };
-
-  const updateSupervisor = async (userId: string, supervisorId: string) => {
-    await supabase
-      .from("profiles")
-      .update({ supervisor_id: supervisorId || null })
-      .eq("id", userId);
-
-    fetchUsers();
-  };
-
-  // 🔥 FIX IMPORTANTE ACÁ
-  const createUser = async () => {
-    if (!form.email || !form.password) {
-      alert("Email y password obligatorios");
+    if (userLoading || role !== "admin") {
       return;
     }
 
-    setCreating(true);
+    fetchUsers();
+  }, [userLoading, role, fetchUsers]);
+
+  const supervisors = useMemo(() => {
+    return usersList.filter(
+      (currentUser) => currentUser.role === "supervisor"
+    );
+  }, [usersList]);
+
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return usersList.filter((currentUser) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        (currentUser.full_name ?? "")
+          .toLowerCase()
+          .includes(normalizedSearch) ||
+        currentUser.email
+          .toLowerCase()
+          .includes(normalizedSearch);
+
+      const matchesRole =
+        roleFilter === "todos" ||
+        currentUser.role === roleFilter;
+
+      return matchesSearch && matchesRole;
+    });
+  }, [usersList, search, roleFilter]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredUsers.length / PAGE_SIZE)
+  );
+
+  const paginatedUsers = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+
+    return filteredUsers.slice(start, start + PAGE_SIZE);
+  }, [filteredUsers, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, roleFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  function updateForm(
+    event:
+      | ChangeEvent<HTMLInputElement>
+      | ChangeEvent<HTMLSelectElement>
+  ) {
+    const { name, value } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
+
+  function openCreateModal() {
+    setForm(INITIAL_FORM);
+    setError("");
+    setMessage("");
+    setModalOpen(true);
+  }
+
+  function closeCreateModal() {
+    if (creating) {
+      return;
+    }
+
+    setModalOpen(false);
+    setForm(INITIAL_FORM);
+    setError("");
+  }
+
+  async function createUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!form.full_name.trim()) {
+      setError("Ingresá el nombre del usuario.");
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setError("Ingresá el correo electrónico.");
+      return;
+    }
+
+    if (form.password.length < 6) {
+      setError(
+        "La contraseña debe tener al menos 6 caracteres."
+      );
+      return;
+    }
 
     try {
-      console.log("ENVIANDO:", form);
+      setCreating(true);
+      setError("");
+      setMessage("");
 
-      const res = await fetch("/api/admin/create-user", {
+      const response = await fetch("/api/admin/create-user", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
-      });
-
-      let data;
-
-      // 🧠 evitar crash si viene vacío
-      try {
-        data = await res.json();
-      } catch {
-        data = { error: "Respuesta vacía del servidor" };
-      }
-
-      console.log("RESPUESTA BACK:", data);
-
-      if (!res.ok) {
-        throw new Error(data.error || "Error al crear usuario");
-      }
-
-      // limpiar form
-      setForm({
-        email: "",
-        password: "",
-        full_name: "",
-        role: "vendedor",
-      });
-
-      // refrescar tabla
-      await fetchUsers();
-
-      alert("Usuario creado correctamente");
-
-    } catch (err: unknown) {
-      console.error(err);
-
-      if (err instanceof Error) {
-        alert(err.message);
-      } else {
-        alert("Ocurrió un error inesperado");
-      }
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const deleteUser = async (selectedUser: Profile) => {
-
-    if (selectedUser.id === user?.id) {
-      alert("No podés eliminar tu propio usuario.");
-      return;
-    }
-
-    const ok = confirm(
-      `¿Está seguro que desea eliminar a ${selectedUser.full_name || selectedUser.email}?`
-    );
-
-    if (!ok) return;
-
-    setDeletingId(selectedUser.id);
-
-    try {
-      const res = await fetch("/api/admin/delete-user", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          id: selectedUser.id,
+          ...form,
+          email: form.email.trim(),
+          full_name: form.full_name.trim(),
         }),
       });
 
-      const data = await res.json();
+      const responseData = await response
+        .json()
+        .catch(() => ({
+          error: "El servidor devolvió una respuesta inválida.",
+        }));
 
-      if (!res.ok) {
-        throw new Error(data.error || "No se pudo eliminar el usuario");
+      if (!response.ok) {
+        throw new Error(
+          responseData.error || "No se pudo crear el usuario."
+        );
       }
 
       await fetchUsers();
 
-      alert("Usuario eliminado correctamente");
-
+      setModalOpen(false);
+      setForm(INITIAL_FORM);
+      setMessage("Usuario creado correctamente.");
     } catch (err) {
-      console.error(err);
+      console.error("Error creando usuario:", err);
 
-      if (err instanceof Error) {
-        alert(err.message);
-      } else {
-        alert("Error eliminando usuario");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al crear el usuario."
+      );
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function updateRole(
+    userId: string,
+    newRole: Role
+  ) {
+    try {
+      setSavingId(userId);
+      setError("");
+      setMessage("");
+
+      const changes: {
+        role: Role;
+        supervisor_id?: null;
+      } = {
+        role: newRole,
+      };
+
+      if (newRole !== "vendedor") {
+        changes.supervisor_id = null;
       }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update(changes)
+        .eq("id", userId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      await fetchUsers();
+      setMessage("Rol actualizado correctamente.");
+    } catch (err) {
+      console.error("Error actualizando rol:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible actualizar el rol."
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function updateSupervisor(
+    userId: string,
+    supervisorId: string
+  ) {
+    try {
+      setSavingId(userId);
+      setError("");
+      setMessage("");
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          supervisor_id: supervisorId || null,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      await fetchUsers();
+      setMessage("Supervisor actualizado correctamente.");
+    } catch (err) {
+      console.error("Error actualizando supervisor:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible actualizar el supervisor."
+      );
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function deleteUser(selectedUser: Profile) {
+    if (selectedUser.id === user?.id) {
+      setError("No podés eliminar tu propio usuario.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Querés eliminar a ${
+        selectedUser.full_name || selectedUser.email
+      }?\n\nEsta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingId(selectedUser.id);
+      setError("");
+      setMessage("");
+
+      const response = await fetch(
+        "/api/admin/delete-user",
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: selectedUser.id,
+          }),
+        }
+      );
+
+      const responseData = await response
+        .json()
+        .catch(() => ({
+          error: "El servidor devolvió una respuesta inválida.",
+        }));
+
+      if (!response.ok) {
+        throw new Error(
+          responseData.error ||
+            "No se pudo eliminar el usuario."
+        );
+      }
+
+      await fetchUsers();
+      setMessage("Usuario eliminado correctamente.");
+    } catch (err) {
+      console.error("Error eliminando usuario:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible eliminar el usuario."
+      );
     } finally {
       setDeletingId(null);
-    };
+    }
   }
-  if (loading || role !== "admin") {
-    return <p style={{ padding: 20 }}>Cargando...</p>;
+
+  if (userLoading || role !== "admin") {
+    return (
+      <main className={styles.page}>
+        <div className={styles.loadingCard}>
+          Cargando administración de usuarios...
+        </div>
+      </main>
+    );
   }
 
   return (
-    <div style={container}>
-      <div>
-        <h1 style={title}>Administración de Usuarios</h1>
-        <p style={subtitle}>
-          Gestioná los roles y jerarquías del sistema
-        </p>
-      </div>
+    <main className={styles.page}>
+      <div className={styles.container}>
+        {/* ENCABEZADO */}
 
-      <div style={card}>
-        <h2 style={cardTitle}>Crear Usuario</h2>
+        <header className={styles.header}>
+          <div>
+            <div className={styles.breadcrumb}>
+              Administración / Usuarios
+            </div>
 
-        <div style={formGrid}>
-          <input
-            placeholder="Nombre"
-            value={form.full_name}
-            onChange={(e) =>
-              setForm({ ...form, full_name: e.target.value })
-            }
-            style={input}
-          />
+            <h1 className={styles.title}>
+              Administración de usuarios
+            </h1>
 
-          <input
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) =>
-              setForm({ ...form, email: e.target.value })
-            }
-            style={input}
-          />
+            <p className={styles.subtitle}>
+              Gestioná usuarios, roles, responsables y jerarquías
+              del CRM.
+            </p>
+          </div>
 
-          <input
-            placeholder="Password"
-            type="password"
-            value={form.password}
-            onChange={(e) =>
-              setForm({ ...form, password: e.target.value })
-            }
-            style={input}
-          />
-
-          <select
-            value={form.role}
-            onChange={(e) =>
-              setForm({ ...form, role: e.target.value })
-            }
-            style={input}
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={openCreateModal}
           >
-            {roles.map((r) => (
-              <option key={r} value={r}>
-                {r.toUpperCase()}
-              </option>
-            ))}
-          </select>
+            <Plus size={17} />
+            Nuevo usuario
+          </button>
+        </header>
+
+        {/* MENSAJES */}
+
+        {error && (
+          <div className={styles.errorBox}>{error}</div>
+        )}
+
+        {message && (
+          <div className={styles.successBox}>{message}</div>
+        )}
+
+        {/* RESUMEN */}
+
+        <section className={styles.summaryGrid}>
+          <article className={styles.summaryCard}>
+            <div className={styles.summaryIconBlue}>
+              <Users size={20} />
+            </div>
+
+            <div>
+              <span className={styles.summaryLabel}>
+                Usuarios registrados
+              </span>
+
+              <strong className={styles.summaryValue}>
+                {usersList.length}
+              </strong>
+            </div>
+          </article>
+
+          <article className={styles.summaryCard}>
+            <div className={styles.summaryIconPurple}>
+              <ShieldCheck size={20} />
+            </div>
+
+            <div>
+              <span className={styles.summaryLabel}>
+                Administradores
+              </span>
+
+              <strong className={styles.summaryValue}>
+                {
+                  usersList.filter(
+                    (currentUser) =>
+                      currentUser.role === "admin"
+                  ).length
+                }
+              </strong>
+            </div>
+          </article>
+
+          <article className={styles.summaryCard}>
+            <div className={styles.summaryIconGreen}>
+              <UserRound size={20} />
+            </div>
+
+            <div>
+              <span className={styles.summaryLabel}>
+                Vendedores
+              </span>
+
+              <strong className={styles.summaryValue}>
+                {
+                  usersList.filter(
+                    (currentUser) =>
+                      currentUser.role === "vendedor"
+                  ).length
+                }
+              </strong>
+            </div>
+          </article>
+        </section>
+
+        {/* FILTROS */}
+
+        <section className={styles.filtersCard}>
+          <div className={styles.searchField}>
+            <label className={styles.label}>
+              Buscar usuario
+            </label>
+
+            <div className={styles.inputWithIcon}>
+              <Search size={17} />
+
+              <input
+                type="text"
+                value={search}
+                onChange={(event) =>
+                  setSearch(event.target.value)
+                }
+                placeholder="Nombre o correo electrónico"
+              />
+            </div>
+          </div>
+
+          <div className={styles.filterField}>
+            <label className={styles.label}>Rol</label>
+
+            <select
+              value={roleFilter}
+              onChange={(event) =>
+                setRoleFilter(
+                  event.target.value as "todos" | Role
+                )
+              }
+              className={styles.select}
+            >
+              <option value="todos">Todos los roles</option>
+
+              {ROLES.map((roleOption) => (
+                <option
+                  key={roleOption.value}
+                  value={roleOption.value}
+                >
+                  {roleOption.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </section>
+
+        <div className={styles.resultsSummary}>
+          Mostrando{" "}
+          <strong>{filteredUsers.length}</strong>{" "}
+          usuario
+          {filteredUsers.length === 1 ? "" : "s"}
         </div>
 
-        <button onClick={createUser} style={button} disabled={creating}>
-          {creating ? "Creando..." : "Crear usuario"}
-        </button>
+        {/* TABLA */}
+
+        <section className={styles.tableCard}>
+          {loadingUsers ? (
+            <div className={styles.emptyState}>
+              Cargando usuarios...
+            </div>
+          ) : paginatedUsers.length === 0 ? (
+            <div className={styles.emptyState}>
+              <strong>No se encontraron usuarios.</strong>
+              <span>
+                Modificá los filtros o registrá un usuario nuevo.
+              </span>
+            </div>
+          ) : (
+            <div className={styles.tableWrapper}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Datos personales</th>
+                    <th>Rol</th>
+                    <th>Supervisor</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {paginatedUsers.map((currentUser) => (
+                    <tr key={currentUser.id}>
+                      <td>
+                        <div className={styles.userCell}>
+                          <div className={styles.avatar}>
+                            {currentUser.avatar_url ? (
+                              <img
+                                src={currentUser.avatar_url}
+                                alt={
+                                  currentUser.full_name ||
+                                  currentUser.email
+                                }
+                              />
+                            ) : (
+                              getInitials(
+                                currentUser.full_name,
+                                currentUser.email
+                              )
+                            )}
+                          </div>
+
+                          <div className={styles.userData}>
+                            <strong>
+                              {currentUser.full_name ||
+                                "Sin nombre"}
+                            </strong>
+
+                            <span>
+                              <Mail size={12} />
+                              {currentUser.email}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className={styles.personalData}>
+                          <span>
+                            <strong>Sexo:</strong>{" "}
+                            {currentUser.sexo || "Sin informar"}
+                          </span>
+
+                          <span>
+                            <strong>Nacimiento:</strong>{" "}
+                            {formatDate(
+                              currentUser.fecha_nacimiento
+                            )}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td>
+                        <select
+                          value={
+                            currentUser.role || "vendedor"
+                          }
+                          onChange={(event) =>
+                            updateRole(
+                              currentUser.id,
+                              event.target.value as Role
+                            )
+                          }
+                          disabled={
+                            savingId === currentUser.id
+                          }
+                          className={styles.tableSelect}
+                        >
+                          {ROLES.map((roleOption) => (
+                            <option
+                              key={roleOption.value}
+                              value={roleOption.value}
+                            >
+                              {roleOption.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <span
+                          className={
+                            styles[
+                              `role_${currentUser.role || "vendedor"}`
+                            ]
+                          }
+                        >
+                          {getRoleLabel(currentUser.role)}
+                        </span>
+                      </td>
+
+                      <td>
+                        {currentUser.role === "vendedor" ? (
+                          <select
+                            value={
+                              currentUser.supervisor_id || ""
+                            }
+                            onChange={(event) =>
+                              updateSupervisor(
+                                currentUser.id,
+                                event.target.value
+                              )
+                            }
+                            disabled={
+                              savingId === currentUser.id
+                            }
+                            className={styles.tableSelect}
+                          >
+                            <option value="">
+                              Sin asignar
+                            </option>
+
+                            {supervisors.map((supervisor) => (
+                              <option
+                                key={supervisor.id}
+                                value={supervisor.id}
+                              >
+                                {supervisor.full_name ||
+                                  supervisor.email}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className={styles.notApplicable}>
+                            No corresponde
+                          </span>
+                        )}
+                      </td>
+
+                      <td>
+                        <div className={styles.actions}>
+                          <button
+                            type="button"
+                            className={styles.deleteButton}
+                            onClick={() =>
+                              deleteUser(currentUser)
+                            }
+                            disabled={
+                              deletingId === currentUser.id ||
+                              currentUser.id === user?.id
+                            }
+                          >
+                            <Trash2 size={14} />
+
+                            {deletingId === currentUser.id
+                              ? "Eliminando..."
+                              : "Eliminar"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* PAGINACIÓN */}
+
+        <div className={styles.pagination}>
+          <span className={styles.paginationInfo}>
+            Página {page} de {totalPages}
+          </span>
+
+          <div className={styles.paginationButtons}>
+            <button
+              type="button"
+              onClick={() =>
+                setPage((current) =>
+                  Math.max(1, current - 1)
+                )
+              }
+              disabled={page === 1}
+              className={styles.paginationButton}
+            >
+              <ChevronLeft size={16} />
+              Anterior
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setPage((current) =>
+                  Math.min(totalPages, current + 1)
+                )
+              }
+              disabled={page === totalPages}
+              className={styles.paginationButton}
+            >
+              Siguiente
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div style={{ marginBottom: 15 }}>
-        <input
-          placeholder="Buscar por nombre o email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            ...input,
-            width: "350px",
+      {/* MODAL NUEVO USUARIO */}
+
+      {modalOpen && (
+        <div
+          className={styles.modalOverlay}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeCreateModal();
+            }
           }}
-        />
-      </div>
+        >
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <div>
+                <div className={styles.modalIcon}>
+                  <UserRound size={22} />
+                </div>
 
-      <div style={card}>
-        <table style={table}>
-          <thead>
-            <tr style={thead}>
-              <th style={th}>Usuario</th>
-              <th style={th}>Sexo</th>
-              <th style={th}>Nacimiento</th>
-              <th style={th}>Email</th>
-              <th style={th}>Rol</th>
-              <th style={th}>Supervisor</th>
-              <th style={th}>Acciones</th>
-            </tr>
-          </thead>
+                <h2>Nuevo usuario</h2>
 
-          <tbody>
-            {paginatedUsers.map((u, i) => (
-              <tr key={u.id} style={i % 2 === 0 ? row : rowAlt}>
-                <td style={td}>{u.full_name || "-"}</td>
-                <td style={td}>{u.sexo || "-"}</td>
-                <td style={td}>{u.fecha_nacimiento || "-"}</td>
-                <td style={td}>{u.email}</td>
+                <p>
+                  Registrá el acceso y asigná el rol inicial del
+                  usuario.
+                </p>
+              </div>
 
-                <td style={td}>
+              <button
+                type="button"
+                className={styles.closeButton}
+                onClick={closeCreateModal}
+                aria-label="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={createUser}>
+              <div className={styles.formGrid}>
+                <div className={styles.fullField}>
+                  <label className={styles.label}>
+                    Nombre completo *
+                  </label>
+
+                  <input
+                    type="text"
+                    name="full_name"
+                    value={form.full_name}
+                    onChange={updateForm}
+                    className={styles.input}
+                    placeholder="Ej. Sofía Martínez"
+                    disabled={creating}
+                    autoFocus
+                  />
+                </div>
+
+                <div className={styles.fullField}>
+                  <label className={styles.label}>
+                    Correo electrónico *
+                  </label>
+
+                  <input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={updateForm}
+                    className={styles.input}
+                    placeholder="usuario@empresa.com"
+                    disabled={creating}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>
+                    Contraseña inicial *
+                  </label>
+
+                  <input
+                    type="password"
+                    name="password"
+                    value={form.password}
+                    onChange={updateForm}
+                    className={styles.input}
+                    placeholder="Mínimo 6 caracteres"
+                    disabled={creating}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>
+                    Rol inicial *
+                  </label>
+
                   <select
-                    value={u.role || "vendedor"}
-                    onChange={(e) =>
-                      updateRole(u.id, e.target.value)
-                    }
-                    disabled={savingId === u.id}
-                    style={input}
+                    name="role"
+                    value={form.role}
+                    onChange={updateForm}
+                    className={styles.select}
+                    disabled={creating}
                   >
-                    {roles.map((r) => (
-                      <option key={r} value={r}>
-                        {r.toUpperCase()}
+                    {ROLES.map((roleOption) => (
+                      <option
+                        key={roleOption.value}
+                        value={roleOption.value}
+                      >
+                        {roleOption.label}
                       </option>
                     ))}
                   </select>
-                </td>
+                </div>
+              </div>
 
-                <td style={td}>
-                  {u.role === "vendedor" ? (
-                    <select
-                      value={u.supervisor_id || ""}
-                      onChange={(e) =>
-                        updateSupervisor(u.id, e.target.value)
-                      }
-                      style={input}
-                    >
-                      <option value="">Sin asignar</option>
-                      {supervisores.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.full_name}
-                        </option>
-                      ))}
-                    </select>
+              {error && modalOpen && (
+                <div className={styles.modalError}>
+                  {error}
+                </div>
+              )}
+
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  className={styles.cancelButton}
+                  onClick={closeCreateModal}
+                  disabled={creating}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className={styles.primaryButton}
+                  disabled={creating}
+                >
+                  {creating ? (
+                    "Creando usuario..."
                   ) : (
-                    "-"
+                    <>
+                      <Plus size={17} />
+                      Crear usuario
+                    </>
                   )}
-                </td>
-                <td style={td}>
-                  <button
-                    onClick={() => deleteUser(u)}
-                    disabled={deletingId === u.id}
-                    style={{
-                      background: "#dc2626",
-                      color: "white",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "8px 12px",
-                      cursor: deletingId === u.id ? "not-allowed" : "pointer",
-                      opacity: deletingId === u.id ? 0.6 : 1,
-                    }}
-                  >
-                    {deletingId === u.id ? "Eliminando..." : "Eliminar"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginTop: 20,
-          alignItems: "center",
-        }}
-      >
-        <button
-          disabled={page === 1}
-          onClick={() => setPage(page - 1)}
-          style={button}
-        >
-          Anterior
-        </button>
-
-        <span>
-          Página {page} de {totalPages || 1}
-        </span>
-
-        <button
-          disabled={page === totalPages || totalPages === 0}
-          onClick={() => setPage(page + 1)}
-          style={button}
-        >
-          Siguiente
-        </button>
-      </div>
-    </div>
-
-
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
-
-/* 🎨 ESTILOS */
-
-const container = {
-  padding: "30px",
-  background: "#f1f5f9",
-};
-
-const title = {
-  fontSize: "26px",
-  fontWeight: "bold",
-};
-
-const subtitle = {
-  color: "#64748b",
-  marginBottom: "20px",
-};
-
-const card = {
-  background: "white",
-  padding: "20px",
-  borderRadius: "10px",
-  marginBottom: "20px",
-  boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
-};
-
-const cardTitle = {
-  marginBottom: "15px",
-  fontWeight: "bold",
-};
-
-const formGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
-  gap: "10px",
-};
-
-const input = {
-  padding: "10px",
-  borderRadius: "6px",
-  border: "1px solid #ccc",
-};
-
-const button = {
-  marginTop: "15px",
-  padding: "10px 16px",
-  background: "#2563eb",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-};
-
-const table = {
-  width: "100%",
-  borderCollapse: "collapse" as const,
-};
-
-const thead = {
-  background: "#1f2937",
-  color: "white",
-};
-
-const th = {
-  padding: "12px",
-  textAlign: "left" as const,
-};
-
-const td = {
-  padding: "10px",
-  borderBottom: "1px solid #ddd",
-};
-
-const row = {};
-
-const rowAlt = {
-  background: "#f9fafb",
-};

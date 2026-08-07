@@ -1,6 +1,11 @@
 "use client";
 
-import React, { FormEvent, useEffect, useState } from "react";
+import React, {
+  FormEvent,
+  Suspense,
+  useEffect,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
@@ -69,7 +74,7 @@ const LOCALIDADES = [
   "Otra",
 ];
 
-export default function AltaCliente() {
+function AltaClienteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -503,6 +508,32 @@ export default function AltaCliente() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function AltaCliente() {
+  return (
+    <Suspense
+      fallback={
+        <main style={styles.page}>
+          <div style={styles.container}>
+            <div
+              style={{
+                padding: "40px",
+                borderRadius: "14px",
+                background: "#ffffff",
+                color: "#64748b",
+                textAlign: "center",
+              }}
+            >
+              Cargando alta de cliente...
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <AltaClienteContent />
+    </Suspense>
   );
 }
 

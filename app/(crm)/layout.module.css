@@ -1,0 +1,24 @@
+.crmLayout {
+  min-height: 100vh;
+  background: #f4f7fb;
+}
+
+.crmContent {
+  min-width: 0;
+  margin-left: 290px;
+
+  transition: margin-left 220ms ease;
+}
+
+@media (max-width: 1024px) {
+  .crmContent {
+    margin-left: 0;
+    padding-top: 58px;
+  }
+}
+
+@media (max-width: 480px) {
+  .crmContent {
+    padding-top: 54px;
+  }
+}

@@ -1,6 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
@@ -16,7 +22,7 @@ import { ClipboardList } from "lucide-react";
 import { getClienteByDocumento } from "@/lib/sql/clientes";
 import type { Cliente } from "../types";
 
-export default function NuevoCliente() {
+function NuevoClienteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -325,6 +331,32 @@ export default function NuevoCliente() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function NuevoCliente() {
+  return (
+    <Suspense
+      fallback={
+        <main style={styles.page}>
+          <div style={styles.container}>
+            <div
+              style={{
+                padding: "40px",
+                borderRadius: "14px",
+                background: "#ffffff",
+                color: "#64748b",
+                textAlign: "center",
+              }}
+            >
+              Cargando búsqueda de cliente...
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <NuevoClienteContent />
+    </Suspense>
   );
 }
 

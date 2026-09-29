@@ -31,7 +31,7 @@ export async function getDashboard(userId: string) {
 ) {
   query = query.eq("created_by", userId);
 }
-
+  console.log(profile.role)
   const { data: clientes, error } = await query;
 
   if (error) {

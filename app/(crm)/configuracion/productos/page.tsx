@@ -34,7 +34,7 @@ type ProductoUpDown = {
     producto_downgrade_id: string | null;
 };
 
-type TipoComision = "one_shot" | "mensual";
+type TipoComision = "one_shot" | "mensual" | "mixta";
 type TipoSuscripcion =
     | "pago_unico"
     | "mensual"
@@ -312,9 +312,15 @@ function formatearPorcentaje(
 }
 
 function obtenerNombreTipoComision(tipo: TipoComision) {
-    return tipo === "one_shot"
-        ? "One-shot"
-        : "Comisión mensual";
+    if (tipo === "one_shot") {
+        return "One-shot";
+    }
+
+    if (tipo === "mensual") {
+        return "Comisión mensual";
+    }
+
+    return "Comisión mixta";
 }
 
 function obtenerNombreTipoSuscripcion(
@@ -769,12 +775,14 @@ export default function ProductosPage() {
         setFormulario((actual) => ({
             ...actual,
             tipo_comision: tipo,
+
             monto_comision_one_shot:
-                tipo === "one_shot"
+                tipo === "one_shot" || tipo === "mixta"
                     ? actual.monto_comision_one_shot
                     : "",
+
             porcentaje_comision_mensual:
-                tipo === "mensual"
+                tipo === "mensual" || tipo === "mixta"
                     ? actual.porcentaje_comision_mensual
                     : "",
         }));
@@ -1002,7 +1010,10 @@ export default function ProductosPage() {
             return "La fecha de fin no puede ser anterior a la fecha de inicio.";
         }
 
-        if (formulario.tipo_comision === "one_shot") {
+        if (
+            formulario.tipo_comision === "one_shot" ||
+            formulario.tipo_comision === "mixta"
+        ) {
             if (!formulario.monto_comision_one_shot.trim()) {
                 return "Ingresá el monto de la comisión one-shot.";
             }
@@ -1016,10 +1027,11 @@ export default function ProductosPage() {
             }
         }
 
-        if (formulario.tipo_comision === "mensual") {
-            if (
-                !formulario.porcentaje_comision_mensual.trim()
-            ) {
+        if (
+            formulario.tipo_comision === "mensual" ||
+            formulario.tipo_comision === "mixta"
+        ) {
+            if (!formulario.porcentaje_comision_mensual.trim()) {
                 return "Ingresá el porcentaje de comisión mensual.";
             }
 
@@ -1075,14 +1087,16 @@ export default function ProductosPage() {
             const precio = convertirNumero(formulario.precio);
 
             const montoOneShot =
-                formulario.tipo_comision === "one_shot"
+                formulario.tipo_comision === "one_shot" ||
+                    formulario.tipo_comision === "mixta"
                     ? convertirNumero(
                         formulario.monto_comision_one_shot
                     )
                     : null;
 
             const porcentajeMensual =
-                formulario.tipo_comision === "mensual"
+                formulario.tipo_comision === "mensual" ||
+                    formulario.tipo_comision === "mixta"
                     ? convertirNumero(
                         formulario.porcentaje_comision_mensual
                     )
@@ -1981,15 +1995,21 @@ export default function ProductosPage() {
                                                 </div>
 
                                                 <div style={styles.secondaryText}>
-                                                    {producto.tipo_comision ===
-                                                        "one_shot"
+                                                    {producto.tipo_comision === "one_shot"
                                                         ? formatearImporte(
                                                             producto.monto_comision_one_shot,
                                                             producto.moneda
                                                         )
-                                                        : formatearPorcentaje(
-                                                            producto.porcentaje_comision_mensual
-                                                        )}
+                                                        : producto.tipo_comision === "mensual"
+                                                            ? formatearPorcentaje(
+                                                                producto.porcentaje_comision_mensual
+                                                            )
+                                                            : `${formatearImporte(
+                                                                producto.monto_comision_one_shot,
+                                                                producto.moneda
+                                                            )} + ${formatearPorcentaje(
+                                                                producto.porcentaje_comision_mensual
+                                                            )} mensual`}
                                                 </div>
                                             </td>
 
@@ -2523,8 +2543,7 @@ export default function ProductosPage() {
                                                 cambiarTipoComision("one_shot")
                                             }
                                             style={
-                                                formulario.tipo_comision ===
-                                                    "one_shot"
+                                                formulario.tipo_comision === "one_shot"
                                                     ? styles.commissionOptionActive
                                                     : styles.commissionOption
                                             }
@@ -2542,8 +2561,7 @@ export default function ProductosPage() {
                                                 cambiarTipoComision("mensual")
                                             }
                                             style={
-                                                formulario.tipo_comision ===
-                                                    "mensual"
+                                                formulario.tipo_comision === "mensual"
                                                     ? styles.commissionOptionActive
                                                     : styles.commissionOption
                                             }
@@ -2554,67 +2572,94 @@ export default function ProductosPage() {
                                                 Porcentaje cobrado periódicamente
                                             </span>
                                         </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                cambiarTipoComision("mixta")
+                                            }
+                                            style={
+                                                formulario.tipo_comision === "mixta"
+                                                    ? styles.commissionOptionActive
+                                                    : styles.commissionOption
+                                            }
+                                            disabled={guardando}
+                                        >
+                                            <strong>Mixta</strong>
+                                            <span>
+                                                Monto fijo + porcentaje periódico
+                                            </span>
+                                        </button>
                                     </div>
                                 </div>
 
-                                {formulario.tipo_comision ===
-                                    "one_shot" ? (
-                                    <div style={styles.fullField}>
-                                        <label style={styles.label}>
-                                            Monto de comisión one-shot *
-                                        </label>
+                                {(
+                                    formulario.tipo_comision === "one_shot" ||
+                                    formulario.tipo_comision === "mixta"
+                                ) && (
+                                        <div style={styles.fullField}>
+                                            <label style={styles.label}>
+                                                Monto de comisión one-shot *
+                                            </label>
 
-                                        <div style={styles.inputWithSuffix}>
-                                            <input
-                                                type="text"
-                                                value={
-                                                    formulario.monto_comision_one_shot
-                                                }
-                                                onChange={(evento) =>
-                                                    actualizarCampo(
-                                                        "monto_comision_one_shot",
-                                                        evento.target.value
-                                                    )
-                                                }
-                                                placeholder="Ej. 5000,00"
-                                                style={styles.input}
-                                                disabled={guardando}
-                                                inputMode="decimal"
-                                            />
+                                            <div style={styles.inputWithSuffix}>
+                                                <input
+                                                    type="text"
+                                                    value={
+                                                        formulario.monto_comision_one_shot
+                                                    }
+                                                    onChange={(evento) =>
+                                                        actualizarCampo(
+                                                            "monto_comision_one_shot",
+                                                            evento.target.value
+                                                        )
+                                                    }
+                                                    placeholder="Ej. 5000,00"
+                                                    style={styles.input}
+                                                    disabled={guardando}
+                                                    inputMode="decimal"
+                                                />
 
-                                            <span style={styles.inputSuffix}>
-                                                {formulario.moneda}
-                                            </span>
+                                                <span style={styles.inputSuffix}>
+                                                    {formulario.moneda}
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div style={styles.fullField}>
-                                        <label style={styles.label}>
-                                            Porcentaje de comisión mensual *
-                                        </label>
+                                    )}
 
-                                        <div style={styles.inputWithSuffix}>
-                                            <input
-                                                type="text"
-                                                value={
-                                                    formulario.porcentaje_comision_mensual
-                                                }
-                                                onChange={(evento) =>
-                                                    actualizarCampo(
-                                                        "porcentaje_comision_mensual",
-                                                        evento.target.value
-                                                    )
-                                                }
-                                                placeholder="Ej. 12,5"
-                                                style={styles.input}
-                                                disabled={guardando}
-                                                inputMode="decimal"
-                                            />
+                                {(
+                                    formulario.tipo_comision === "mensual" ||
+                                    formulario.tipo_comision === "mixta"
+                                ) && (
+                                        <div style={styles.fullField}>
+                                            <label style={styles.label}>
+                                                Porcentaje de comisión mensual *
+                                            </label>
 
-                                            <span style={styles.inputSuffix}>%</span>
+                                            <div style={styles.inputWithSuffix}>
+                                                <input
+                                                    type="text"
+                                                    value={
+                                                        formulario.porcentaje_comision_mensual
+                                                    }
+                                                    onChange={(evento) =>
+                                                        actualizarCampo(
+                                                            "porcentaje_comision_mensual",
+                                                            evento.target.value
+                                                        )
+                                                    }
+                                                    placeholder="Ej. 12,5"
+                                                    style={styles.input}
+                                                    disabled={guardando}
+                                                    inputMode="decimal"
+                                                />
+
+                                                <span style={styles.inputSuffix}>
+                                                    %
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
                                 <div style={styles.field}>
                                     <label style={styles.label}>
@@ -3348,7 +3393,7 @@ const styles: Record<string, React.CSSProperties> = {
     commissionOptions: {
         display: "grid",
         gridTemplateColumns:
-            "repeat(2, minmax(0, 1fr))",
+            "repeat(3, minmax(0, 1fr))",
         gap: "12px",
     },
 

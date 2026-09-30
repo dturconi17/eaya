@@ -108,6 +108,14 @@ const menuSections: MenuSection[] = [
         label: "Productos",
       },
       {
+        href: "/configuracion/canales",
+        label: "Configuracion Comercial",
+      },
+      {
+        href: "/configuracion/puntos-venta",
+        label: "Configuracion Sucursales",
+      },
+      {
         href: "/configuracion/intereses/preguntas",
         label: "Preguntas generales",
       },
@@ -442,22 +450,22 @@ export function SidebarMenu() {
 
                         return (
                           <Link
-  key={item.href}
-  href={item.href}
-  className={[
-    styles.item,
-    isActive ? styles.itemActive : "",
-  ]
-    .filter(Boolean)
-    .join(" ")}
-  title={item.label}
->
-  <span className={styles.itemIndicator} />
+                            key={item.href}
+                            href={item.href}
+                            className={[
+                              styles.item,
+                              isActive ? styles.itemActive : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            title={item.label}
+                          >
+                            <span className={styles.itemIndicator} />
 
-  <span className={styles.collapsibleText}>
-    {item.label}
-  </span>
-</Link>
+                            <span className={styles.collapsibleText}>
+                              {item.label}
+                            </span>
+                          </Link>
                         );
                       })}
                     </div>

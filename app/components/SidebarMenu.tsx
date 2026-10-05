@@ -122,6 +122,18 @@ const menuSections: MenuSection[] = [
     ],
   },
   {
+    title: "Objetivos",
+    key: "objetivos",
+    roles: ["admin"],
+    icon: <Settings size={18} />,
+    items: [
+      {
+        href: "/configuracion/presupuestos",
+        label: "Presupuestos",
+      },
+    ],
+  },
+  {
     title: "Administración",
     key: "admin",
     roles: ["admin"],

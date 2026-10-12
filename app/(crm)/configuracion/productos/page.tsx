@@ -35,6 +35,7 @@ type ProductoUpDown = {
 };
 
 type TipoComision = "one_shot" | "mensual" | "mixta";
+type ModalidadProducto = "cantidad" | "volumen";
 type TipoSuscripcion =
     | "pago_unico"
     | "mensual"
@@ -53,8 +54,9 @@ type Producto = {
     nombre: string;
     descripcion: string | null;
 
-    precio: number;
+    precio: number | null;
     moneda: string;
+    modalidad_producto: ModalidadProducto;
 
     tipo_suscripcion: TipoSuscripcion;
     formas_pago: FormaPago[];
@@ -66,6 +68,9 @@ type Producto = {
     tipo_comision: TipoComision;
     monto_comision_one_shot: number | null;
     porcentaje_comision_mensual: number | null;
+    porcentaje_comision_volumen: number | null;
+    monto_minimo_colocacion: number | null;
+    monto_maximo_colocacion: number | null;
 
     fecha_inicio: string;
     fecha_fin: string | null;
@@ -128,6 +133,7 @@ type ProductoFormData = {
 
     precio: string;
     moneda: string;
+    modalidad_producto: ModalidadProducto;
 
     tipo_suscripcion: TipoSuscripcion;
     formas_pago: FormaPago[];
@@ -139,6 +145,9 @@ type ProductoFormData = {
     tipo_comision: TipoComision;
     monto_comision_one_shot: string;
     porcentaje_comision_mensual: string;
+    porcentaje_comision_volumen: string;
+    monto_minimo_colocacion: string;
+    monto_maximo_colocacion: string;
 
     fecha_inicio: string;
     fecha_fin: string;
@@ -147,7 +156,6 @@ type ProductoFormData = {
 };
 
 type FiltroEstado = "todos" | "activos" | "inactivos";
-type FiltroComision = "todas" | TipoComision;
 
 /* =========================================================
    CONSTANTES
@@ -160,6 +168,7 @@ const FORMULARIO_INICIAL: ProductoFormData = {
 
     precio: "",
     moneda: "ARS",
+    modalidad_producto: "cantidad",
 
     tipo_suscripcion: "pago_unico",
     formas_pago: [],
@@ -171,6 +180,9 @@ const FORMULARIO_INICIAL: ProductoFormData = {
     tipo_comision: "one_shot",
     monto_comision_one_shot: "",
     porcentaje_comision_mensual: "",
+    porcentaje_comision_volumen: "",
+    monto_minimo_colocacion: "",
+    monto_maximo_colocacion: "",
 
     fecha_inicio: "",
     fecha_fin: "",
@@ -437,8 +449,6 @@ export default function ProductosPage() {
     const [busqueda, setBusqueda] = useState("");
     const [filtroEstado, setFiltroEstado] =
         useState<FiltroEstado>("todos");
-    const [filtroComision, setFiltroComision] =
-        useState<FiltroComision>("todas");
     const [filtroEmpresa, setFiltroEmpresa] = useState("");
 
     const [modalAbierto, setModalAbierto] = useState(false);
@@ -631,10 +641,6 @@ export default function ProductosPage() {
                 (filtroEstado === "inactivos" &&
                     !producto.activo);
 
-            const coincideComision =
-                filtroComision === "todas" ||
-                producto.tipo_comision === filtroComision;
-
             const coincideEmpresa =
                 !filtroEmpresa ||
                 producto.empresa_id === filtroEmpresa;
@@ -642,7 +648,6 @@ export default function ProductosPage() {
             return (
                 coincideBusqueda &&
                 coincideEstado &&
-                coincideComision &&
                 coincideEmpresa
             );
         });
@@ -650,7 +655,6 @@ export default function ProductosPage() {
         productos,
         busqueda,
         filtroEstado,
-        filtroComision,
         filtroEmpresa,
     ]);
 
@@ -702,8 +706,11 @@ export default function ProductosPage() {
             usa_pasarela_eaya:
                 producto.usa_pasarela_eaya ?? false,
 
-            precio: String(producto.precio),
+            precio: producto.precio === null ? "" : String(producto.precio),
+            monto_minimo_colocacion: producto.monto_minimo_colocacion == null ? "" : String(producto.monto_minimo_colocacion),
+            monto_maximo_colocacion: producto.monto_maximo_colocacion == null ? "" : String(producto.monto_maximo_colocacion),
             moneda: producto.moneda,
+            modalidad_producto: producto.modalidad_producto || "cantidad",
 
             tipo_suscripcion:
                 producto.tipo_suscripcion || "pago_unico",
@@ -719,6 +726,10 @@ export default function ProductosPage() {
                     ? String(
                         producto.porcentaje_comision_mensual
                     )
+                    : "",
+            porcentaje_comision_volumen:
+                producto.porcentaje_comision_volumen !== null
+                    ? String(producto.porcentaje_comision_volumen)
                     : "",
 
             fecha_inicio: producto.fecha_inicio,
@@ -943,14 +954,33 @@ export default function ProductosPage() {
             return "El nombre del producto es demasiado corto.";
         }
 
-        if (!formulario.precio.trim()) {
-            return "El precio del producto es obligatorio.";
+        if (formulario.modalidad_producto === "cantidad") {
+            if (!formulario.precio.trim()) {
+                return "El precio del producto es obligatorio.";
+            }
+
+            const precio =
+                formulario.modalidad_producto === "cantidad"
+                    ? convertirNumero(formulario.precio)
+                    : null;
+
+            if (
+                precio === null ||
+                !Number.isFinite(precio) ||
+                precio < 0
+            ) {
+                return "Ingresá un precio válido.";
+            }
         }
 
-        const precio = convertirNumero(formulario.precio);
-
-        if (!Number.isFinite(precio) || precio < 0) {
-            return "Ingresá un precio válido.";
+        if (formulario.modalidad_producto === "volumen") {
+            const min = formulario.monto_minimo_colocacion.trim()
+                ? convertirNumero(formulario.monto_minimo_colocacion) : null;
+            const max = formulario.monto_maximo_colocacion.trim()
+                ? convertirNumero(formulario.monto_maximo_colocacion) : null;
+            if (min !== null && (!Number.isFinite(min) || min < 0)) return "Ingresá un mínimo de colocación válido.";
+            if (max !== null && (!Number.isFinite(max) || max < 0)) return "Ingresá un máximo de colocación válido.";
+            if (min !== null && max !== null && max < min) return "El máximo de colocación no puede ser inferior al mínimo.";
         }
 
         if (!formulario.moneda) {
@@ -1031,20 +1061,23 @@ export default function ProductosPage() {
             formulario.tipo_comision === "mensual" ||
             formulario.tipo_comision === "mixta"
         ) {
-            if (!formulario.porcentaje_comision_mensual.trim()) {
-                return "Ingresá el porcentaje de comisión mensual.";
+            const valorPorcentaje = formulario.modalidad_producto === "volumen"
+                ? formulario.porcentaje_comision_volumen
+                : formulario.porcentaje_comision_mensual;
+            if (!valorPorcentaje.trim()) {
+                return formulario.modalidad_producto === "volumen"
+                    ? "Ingresá el porcentaje de comisión variable."
+                    : "Ingresá el porcentaje de comisión mensual.";
             }
 
-            const porcentaje = convertirNumero(
-                formulario.porcentaje_comision_mensual
-            );
+            const porcentaje = convertirNumero(valorPorcentaje);
 
             if (
                 !Number.isFinite(porcentaje) ||
                 porcentaje < 0 ||
                 porcentaje > 100
             ) {
-                return "El porcentaje mensual debe estar entre 0 y 100.";
+                return "El porcentaje debe estar entre 0 y 100.";
             }
         }
 
@@ -1084,7 +1117,10 @@ export default function ProductosPage() {
             setError("");
             setMensaje("");
 
-            const precio = convertirNumero(formulario.precio);
+            const precio = formulario.modalidad_producto === "cantidad"
+                ? convertirNumero(formulario.precio) : null;
+            const esVolumen = formulario.modalidad_producto === "volumen";
+            const requiereVariable = formulario.tipo_comision === "mensual" || formulario.tipo_comision === "mixta";
 
             const montoOneShot =
                 formulario.tipo_comision === "one_shot" ||
@@ -1094,13 +1130,10 @@ export default function ProductosPage() {
                     )
                     : null;
 
-            const porcentajeMensual =
-                formulario.tipo_comision === "mensual" ||
-                    formulario.tipo_comision === "mixta"
-                    ? convertirNumero(
-                        formulario.porcentaje_comision_mensual
-                    )
-                    : null;
+            const porcentajeMensual = !esVolumen && requiereVariable
+                ? convertirNumero(formulario.porcentaje_comision_mensual) : null;
+            const porcentajeVolumen = esVolumen && requiereVariable
+                ? convertirNumero(formulario.porcentaje_comision_volumen) : null;
 
             const maximoPorCliente = Number(
                 formulario.maximo_por_cliente
@@ -1118,6 +1151,12 @@ export default function ProductosPage() {
 
                 precio,
                 moneda: formulario.moneda,
+                modalidad_producto: formulario.modalidad_producto,
+                monto_minimo_colocacion: esVolumen && formulario.monto_minimo_colocacion.trim()
+                    ? convertirNumero(formulario.monto_minimo_colocacion) : null,
+                monto_maximo_colocacion: esVolumen && formulario.monto_maximo_colocacion.trim()
+                    ? convertirNumero(formulario.monto_maximo_colocacion) : null,
+                porcentaje_comision_volumen: porcentajeVolumen,
 
                 tipo_suscripcion:
                     formulario.tipo_suscripcion,
@@ -1735,28 +1774,6 @@ export default function ProductosPage() {
                     </div>
 
                     <div style={styles.filterField}>
-                        <label style={styles.label}>
-                            Tipo de comisión
-                        </label>
-
-                        <select
-                            value={filtroComision}
-                            onChange={(evento) =>
-                                setFiltroComision(
-                                    evento.target.value as FiltroComision
-                                )
-                            }
-                            style={styles.select}
-                        >
-                            <option value="todas">Todas</option>
-                            <option value="one_shot">One-shot</option>
-                            <option value="mensual">
-                                Comisión mensual
-                            </option>
-                        </select>
-                    </div>
-
-                    <div style={styles.filterField}>
                         <label style={styles.label}>Estado</label>
 
                         <select
@@ -1989,27 +2006,21 @@ export default function ProductosPage() {
                                             </td>
                                             <td style={styles.td}>
                                                 <div style={styles.commissionType}>
-                                                    {obtenerNombreTipoComision(
-                                                        producto.tipo_comision
-                                                    )}
+                                                    {producto.modalidad_producto === "volumen" && producto.tipo_comision === "mensual"
+                                                        ? "Comisión variable"
+                                                        : obtenerNombreTipoComision(producto.tipo_comision)}
                                                 </div>
 
                                                 <div style={styles.secondaryText}>
                                                     {producto.tipo_comision === "one_shot"
-                                                        ? formatearImporte(
-                                                            producto.monto_comision_one_shot,
-                                                            producto.moneda
-                                                        )
-                                                        : producto.tipo_comision === "mensual"
-                                                            ? formatearPorcentaje(
-                                                                producto.porcentaje_comision_mensual
-                                                            )
-                                                            : `${formatearImporte(
-                                                                producto.monto_comision_one_shot,
-                                                                producto.moneda
-                                                            )} + ${formatearPorcentaje(
-                                                                producto.porcentaje_comision_mensual
-                                                            )} mensual`}
+                                                        ? formatearImporte(producto.monto_comision_one_shot, producto.moneda)
+                                                        : producto.modalidad_producto === "volumen"
+                                                            ? producto.tipo_comision === "mensual"
+                                                                ? `${formatearPorcentaje(producto.porcentaje_comision_volumen)} sobre monto colocado`
+                                                                : `${formatearImporte(producto.monto_comision_one_shot, producto.moneda)} + ${formatearPorcentaje(producto.porcentaje_comision_volumen)} sobre monto colocado`
+                                                            : producto.tipo_comision === "mensual"
+                                                                ? formatearPorcentaje(producto.porcentaje_comision_mensual)
+                                                                : `${formatearImporte(producto.monto_comision_one_shot, producto.moneda)} + ${formatearPorcentaje(producto.porcentaje_comision_mensual)} mensual`}
                                                 </div>
                                             </td>
 
@@ -2317,26 +2328,96 @@ export default function ProductosPage() {
                                     )}
                                 </div>
 
-                                <div style={styles.field}>
+                                <div style={styles.fullField}>
                                     <label style={styles.label}>
-                                        Precio *
+                                        Modalidad del producto *
                                     </label>
 
-                                    <input
-                                        type="text"
-                                        value={formulario.precio}
-                                        onChange={(evento) =>
-                                            actualizarCampo(
-                                                "precio",
-                                                evento.target.value
-                                            )
-                                        }
-                                        placeholder="Ej. 25000,00"
-                                        style={styles.input}
-                                        disabled={guardando}
-                                        inputMode="decimal"
-                                    />
+                                    <div style={styles.commissionOptions}>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setFormulario((actual) => ({
+                                                    ...actual,
+                                                    modalidad_producto: "cantidad",
+                                                    monto_minimo_colocacion: "",
+                                                    monto_maximo_colocacion: "",
+                                                    porcentaje_comision_volumen: "",
+                                                }))
+                                            }
+                                            style={
+                                                formulario.modalidad_producto === "cantidad"
+                                                    ? styles.commissionOptionActive
+                                                    : styles.commissionOption
+                                            }
+                                            disabled={guardando}
+                                        >
+                                            <strong>Por cantidad</strong>
+                                            <span>Se venden unidades del producto</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setFormulario((actual) => ({
+                                                    ...actual,
+                                                    modalidad_producto: "volumen",
+                                                    precio: "",
+                                                    porcentaje_comision_mensual: "",
+                                                }))
+                                            }
+                                            style={
+                                                formulario.modalidad_producto === "volumen"
+                                                    ? styles.commissionOptionActive
+                                                    : styles.commissionOption
+                                            }
+                                            disabled={guardando}
+                                        >
+                                            <strong>Por volumen</strong>
+                                            <span>Se registra un monto en cada operación</span>
+                                        </button>
+                                    </div>
                                 </div>
+
+                                {formulario.modalidad_producto === "cantidad" && (
+                                    <div style={styles.field}>
+                                        <label style={styles.label}>
+                                            Precio *
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            value={formulario.precio}
+                                            onChange={(evento) =>
+                                                actualizarCampo(
+                                                    "precio",
+                                                    evento.target.value
+                                                )
+                                            }
+                                            placeholder="Ej. 25000,00"
+                                            style={styles.input}
+                                            disabled={guardando}
+                                            inputMode="decimal"
+                                        />
+                                    </div>
+                                )}
+
+                                {formulario.modalidad_producto === "volumen" && (
+                                    <>
+                                        <div style={styles.field}>
+                                            <label style={styles.label}>Mínimo de colocación</label>
+                                            <input type="text" value={formulario.monto_minimo_colocacion}
+                                                onChange={(e) => actualizarCampo("monto_minimo_colocacion", e.target.value)}
+                                                placeholder="Ej. 100000" style={styles.input} disabled={guardando} inputMode="decimal" />
+                                        </div>
+                                        <div style={styles.field}>
+                                            <label style={styles.label}>Máximo de colocación</label>
+                                            <input type="text" value={formulario.monto_maximo_colocacion}
+                                                onChange={(e) => actualizarCampo("monto_maximo_colocacion", e.target.value)}
+                                                placeholder="Ej. 10000000" style={styles.input} disabled={guardando} inputMode="decimal" />
+                                        </div>
+                                    </>
+                                )}
 
                                 <div style={styles.field}>
                                     <label style={styles.label}>
@@ -2567,9 +2648,9 @@ export default function ProductosPage() {
                                             }
                                             disabled={guardando}
                                         >
-                                            <strong>Mensual</strong>
+                                            <strong>{formulario.modalidad_producto === "volumen" ? "Variable" : "Mensual"}</strong>
                                             <span>
-                                                Porcentaje cobrado periódicamente
+                                                {formulario.modalidad_producto === "volumen" ? "Porcentaje sobre el monto colocado" : "Porcentaje cobrado periódicamente"}
                                             </span>
                                         </button>
 
@@ -2587,7 +2668,7 @@ export default function ProductosPage() {
                                         >
                                             <strong>Mixta</strong>
                                             <span>
-                                                Monto fijo + porcentaje periódico
+                                                {formulario.modalidad_producto === "volumen" ? "Monto fijo + porcentaje sobre el monto colocado" : "Monto fijo + porcentaje periódico"}
                                             </span>
                                         </button>
                                     </div>
@@ -2633,18 +2714,22 @@ export default function ProductosPage() {
                                 ) && (
                                         <div style={styles.fullField}>
                                             <label style={styles.label}>
-                                                Porcentaje de comisión mensual *
+                                                {formulario.modalidad_producto === "volumen" ? "Porcentaje de comisión variable *" : "Porcentaje de comisión mensual *"}
                                             </label>
 
                                             <div style={styles.inputWithSuffix}>
                                                 <input
                                                     type="text"
                                                     value={
-                                                        formulario.porcentaje_comision_mensual
+                                                        formulario.modalidad_producto === "volumen"
+                                                            ? formulario.porcentaje_comision_volumen
+                                                            : formulario.porcentaje_comision_mensual
                                                     }
                                                     onChange={(evento) =>
                                                         actualizarCampo(
-                                                            "porcentaje_comision_mensual",
+                                                            formulario.modalidad_producto === "volumen"
+                                                                ? "porcentaje_comision_volumen"
+                                                                : "porcentaje_comision_mensual",
                                                             evento.target.value
                                                         )
                                                     }

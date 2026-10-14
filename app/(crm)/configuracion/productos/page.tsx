@@ -64,6 +64,7 @@ type Producto = {
     maximo_por_cliente: number;
     maximo_beneficiarios: number;
     usa_pasarela_eaya: boolean;
+    requiere_validacion: boolean;
 
     tipo_comision: TipoComision;
     monto_comision_one_shot: number | null;
@@ -141,6 +142,7 @@ type ProductoFormData = {
     maximo_por_cliente: string;
     maximo_beneficiarios: string;
     usa_pasarela_eaya: boolean;
+    requiere_validacion: boolean;
 
     tipo_comision: TipoComision;
     monto_comision_one_shot: string;
@@ -176,6 +178,7 @@ const FORMULARIO_INICIAL: ProductoFormData = {
     maximo_por_cliente: "1",
     maximo_beneficiarios: "0",
     usa_pasarela_eaya: false,
+    requiere_validacion: false,
 
     tipo_comision: "one_shot",
     monto_comision_one_shot: "",
@@ -410,6 +413,9 @@ function valorCambio(
 
         return `${cantidad} beneficiario${cantidad === 1 ? "" : "s"
             }`;
+    }
+    if (campo === "requiere_validacion") {
+        return valor ? "Sí" : "No";
     }
     if (campo === "usa_pasarela_eaya") {
         return valor ? "Sí" : "No";
@@ -705,6 +711,7 @@ export default function ProductosPage() {
 
             usa_pasarela_eaya:
                 producto.usa_pasarela_eaya ?? false,
+            requiere_validacion: producto.requiere_validacion ?? false,
 
             precio: producto.precio === null ? "" : String(producto.precio),
             monto_minimo_colocacion: producto.monto_minimo_colocacion == null ? "" : String(producto.monto_minimo_colocacion),
@@ -1177,6 +1184,7 @@ export default function ProductosPage() {
 
                 maximo_por_cliente: maximoPorCliente,
                 usa_pasarela_eaya: formulario.usa_pasarela_eaya,
+                requiere_validacion: formulario.requiere_validacion,
 
                 activo: formulario.fecha_fin
                     ? false
@@ -1538,6 +1546,10 @@ export default function ProductosPage() {
             {
                 key: "usa_pasarela_eaya",
                 label: "Utiliza pasarela EAYA",
+            },
+            {
+                key: "requiere_validacion",
+                label: "Requiere validación de identidad",
             },
             {
                 key: "tipo_comision",
@@ -2559,6 +2571,38 @@ export default function ProductosPage() {
                                             <span style={styles.checkboxDescription}>
                                                 El pago del producto será procesado mediante
                                                 la pasarela de EAYA.
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div style={styles.fullField}>
+                                    <label style={styles.label}>
+                                        Validación de identidad
+                                    </label>
+                                    <label
+                                        style={
+                                            formulario.requiere_validacion
+                                                ? styles.checkboxCardActive
+                                                : styles.checkboxCard
+                                        }
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={formulario.requiere_validacion}
+                                            onChange={(evento) =>
+                                                actualizarCampo(
+                                                    "requiere_validacion",
+                                                    evento.target.checked
+                                                )
+                                            }
+                                            disabled={guardando}
+                                        />
+                                        <div>
+                                            <strong>Requiere validación</strong>
+                                            <span style={styles.checkboxDescription}>
+                                                Las operaciones comerciales de este producto
+                                                deberán iniciar una verificación de identidad VU
+                                                independiente por operación.
                                             </span>
                                         </div>
                                     </label>

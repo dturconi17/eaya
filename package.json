@@ -22,7 +22,7 @@
     "react-dom": "19.2.4",
     "react-phone-input-2": "^2.15.1",
     "react-router-dom": "^7.14.2",
-    "recharts": "^3.8.1"
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.4",

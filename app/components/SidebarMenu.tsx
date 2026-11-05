@@ -52,7 +52,7 @@ const menuSections: MenuSection[] = [
     icon: <BarChart3 size={18} />,
     items: [
       {
-        href: "/reportes",
+        href: "/reportes/altas-clientes",
         label: "Resumen carga de prospectos",
       },
     ],

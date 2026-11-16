@@ -4,6 +4,7 @@ import React, {
   FormEvent,
   Suspense,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -34,6 +35,11 @@ type FormState = {
   email: string;
   celular: string;
   localidad: string;
+  provincia: string;
+  provincia_id: string;
+  localidad_id: string;
+  localidad_latitud: number | null;
+  localidad_longitud: number | null;
   sexo: string;
   estado_civil: string;
   cantidad_hijos: string;
@@ -49,36 +55,108 @@ const FORM_INICIAL: FormState = {
   email: "",
   celular: "",
   localidad: "",
+  provincia: "",
+  provincia_id: "",
+  localidad_id: "",
+  localidad_latitud: null,
+  localidad_longitud: null,
   sexo: "",
   estado_civil: "",
   cantidad_hijos: "",
   actividad: "",
 };
 
-const LOCALIDADES = [
-  "Ciudad Autónoma de Buenos Aires",
-  "La Plata",
-  "Mar del Plata",
-  "Bahía Blanca",
-  "San Isidro",
-  "Vicente López",
-  "Tigre",
-  "Pilar",
-  "Morón",
-  "Quilmes",
-  "Lomas de Zamora",
-  "Avellaneda",
-  "Lanús",
-  "San Martín",
-  "Tres de Febrero",
-  "Otra",
-];
+type Provincia = { id: string; nombre: string };
+type Localidad = {
+  id: string;
+  nombre: string;
+  centroide?: { lat: number; lon: number } | null;
+};
+
+type RespuestaGeoref<T> = { resultados: T[] };
+
+function ordenarPorNombre<T extends { nombre: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) =>
+    a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" })
+  );
+}
 
 function AltaClienteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [form, setForm] = useState<FormState>(FORM_INICIAL);
+  const [provincias, setProvincias] = useState<Provincia[]>([]);
+  const [localidades, setLocalidades] = useState<Localidad[]>([]);
+  const [busquedaLocalidad, setBusquedaLocalidad] = useState("");
+  const [cargandoProvincias, setCargandoProvincias] = useState(true);
+  const [cargandoLocalidades, setCargandoLocalidades] = useState(false);
+  const [errorGeografia, setErrorGeografia] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function cargarProvincias() {
+      try {
+        const res = await fetch("/api/geografia/provincias", {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("No se pudieron obtener las provincias.");
+        const json = (await res.json()) as RespuestaGeoref<Provincia>;
+        setProvincias(ordenarPorNombre(json.resultados ?? []));
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setErrorGeografia(
+            error instanceof Error ? error.message : "Error al cargar provincias."
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) setCargandoProvincias(false);
+      }
+    }
+    void cargarProvincias();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!form.provincia_id) {
+      setLocalidades([]);
+      return;
+    }
+    const controller = new AbortController();
+    async function cargarLocalidades() {
+      setCargandoLocalidades(true);
+      setErrorGeografia("");
+      setLocalidades([]);
+      try {
+        const res = await fetch(
+          `/api/geografia/localidades?provincia=${encodeURIComponent(form.provincia_id)}`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) throw new Error("No se pudieron obtener las localidades.");
+        const json = (await res.json()) as RespuestaGeoref<Localidad>;
+        setLocalidades(ordenarPorNombre(json.resultados ?? []));
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setErrorGeografia(
+            error instanceof Error ? error.message : "Error al cargar localidades."
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) setCargandoLocalidades(false);
+      }
+    }
+    void cargarLocalidades();
+    return () => controller.abort();
+  }, [form.provincia_id]);
+
+  const localidadesFiltradas = useMemo(() => {
+    const busqueda = busquedaLocalidad.trim().toLocaleLowerCase("es-AR");
+    if (!busqueda) return localidades;
+    return localidades.filter((l) =>
+      l.nombre.toLocaleLowerCase("es-AR").includes(busqueda)
+    );
+  }, [localidades, busquedaLocalidad]);
+
   const [phoneError, setPhoneError] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -130,7 +208,8 @@ function AltaClienteContent() {
     if (!form.numero_documento.trim()) return "El documento es obligatorio.";
     if (!form.sexo) return "Seleccioná el sexo.";
     if (!form.estado_civil) return "Seleccioná el estado civil.";
-    if (!form.localidad) return "Seleccioná la localidad.";
+    if (!form.provincia_id) return "Seleccioná la provincia.";
+    if (!form.localidad_id || !form.localidad) return "Seleccioná la localidad.";
     if (!form.actividad) return "Seleccioná la actividad.";
     if (phoneError) return "El número de teléfono no es válido.";
 
@@ -171,6 +250,11 @@ function AltaClienteContent() {
           email: form.email.trim() || null,
           celular: form.celular || null,
           localidad: form.localidad,
+          provincia: form.provincia,
+          provincia_id: form.provincia_id,
+          localidad_id: form.localidad_id,
+          localidad_latitud: form.localidad_latitud,
+          localidad_longitud: form.localidad_longitud,
           sexo: form.sexo,
           estado_civil: form.estado_civil,
           cantidad_hijos: Number(form.cantidad_hijos || 0),
@@ -370,27 +454,102 @@ function AltaClienteContent() {
                 </div>
               </Field>
 
-              <Field label="Localidad" required fullWidth>
-                <div style={styles.selectWithIcon}>
-                  <MapPin size={18} style={styles.selectIcon} />
+              <Field label="Provincia" required>
+                <select
+                  value={form.provincia_id}
+                  onChange={(event) => {
+                    const id = event.target.value;
+                    const provincia = provincias.find((p) => p.id === id);
+                    setForm((prev) => ({
+                      ...prev,
+                      provincia_id: id,
+                      provincia: provincia?.nombre ?? "",
+                      localidad: "",
+                      localidad_id: "",
+                      localidad_latitud: null,
+                      localidad_longitud: null,
+                    }));
+                    setBusquedaLocalidad("");
+                    setMensaje("");
+                    setTipoMensaje("");
+                  }}
+                  style={styles.input}
+                  disabled={loading || cargandoProvincias}
+                >
+                  <option value="">
+                    {cargandoProvincias ? "Cargando provincias..." : "Seleccioná una provincia"}
+                  </option>
+                  {provincias.map((provincia) => (
+                    <option key={provincia.id} value={provincia.id}>
+                      {provincia.nombre}
+                    </option>
+                  ))}
+                </select>
+              </Field>
 
-                  <select
-                    name="localidad"
-                    value={form.localidad}
-                    onChange={handleChange}
-                    style={styles.selectIconInput}
-                    disabled={loading}
-                  >
-                    <option value="">Seleccioná una localidad</option>
-
-                    {LOCALIDADES.map((localidad) => (
-                      <option key={localidad} value={localidad}>
-                        {localidad}
+              <Field label="Localidad" required>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <input
+                    type="search"
+                    placeholder="Buscar localidad por nombre..."
+                    value={busquedaLocalidad}
+                    onChange={(event) => setBusquedaLocalidad(event.target.value)}
+                    disabled={!form.provincia_id || cargandoLocalidades || loading}
+                    style={styles.input}
+                    aria-label="Buscar localidad"
+                  />
+                  <div style={styles.selectWithIcon}>
+                    <MapPin size={18} style={styles.selectIcon} />
+                    <select
+                      value={form.localidad_id}
+                      onChange={(event) => {
+                        const seleccionada = localidades.find(
+                          (l) => l.id === event.target.value
+                        );
+                        setForm((prev) => ({
+                          ...prev,
+                          localidad_id: seleccionada?.id ?? "",
+                          localidad: seleccionada?.nombre ?? "",
+                          localidad_latitud: seleccionada?.centroide?.lat ?? null,
+                          localidad_longitud: seleccionada?.centroide?.lon ?? null,
+                        }));
+                        setMensaje("");
+                        setTipoMensaje("");
+                      }}
+                      style={styles.selectIconInput}
+                      disabled={!form.provincia_id || cargandoLocalidades || loading}
+                    >
+                      <option value="">
+                        {!form.provincia_id
+                          ? "Primero seleccioná una provincia"
+                          : cargandoLocalidades
+                            ? "Cargando localidades..."
+                            : "Seleccioná una localidad"}
                       </option>
-                    ))}
-                  </select>
+                      {form.localidad_id &&
+                        !localidadesFiltradas.some((l) => l.id === form.localidad_id) && (
+                          <option value={form.localidad_id}>{form.localidad}</option>
+                        )}
+                      {localidadesFiltradas.map((localidad) => (
+                        <option key={localidad.id} value={localidad.id}>
+                          {localidad.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {form.provincia_id && !cargandoLocalidades && (
+                    <span style={{ fontSize: 12, color: "#64748b" }}>
+                      {localidadesFiltradas.length} localidades disponibles
+                    </span>
+                  )}
                 </div>
               </Field>
+
+              {errorGeografia && (
+                <div role="alert" style={{ ...styles.fieldError, gridColumn: "1 / -1" }}>
+                  {errorGeografia}. Actualizá la página para volver a intentar.
+                </div>
+              )}
             </div>
           </Section>
 

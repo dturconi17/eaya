@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import KPICard from "../components/KPICard";
+import MapaLeadsReporte from "./components/MapaLeadsReporte";
 import {
     ResponsiveContainer,
     BarChart,
@@ -218,6 +219,7 @@ export default function AltasClientesPage() {
     const [inicial] = useState(fechasIniciales);
     const [responsableAplicado, setResponsableAplicado] =
         useState("todos");
+    const [fechasAplicadas, setFechasAplicadas] = useState(inicial);
     // Filtros
     const [desde, setDesde] = useState(inicial.desde);
     const [hasta, setHasta] = useState(inicial.hasta);
@@ -401,6 +403,7 @@ export default function AltasClientesPage() {
         try {
             await cargarReporte(desde, hasta, responsable);
             setResponsableAplicado(responsable);
+            setFechasAplicadas({ desde, hasta });
         } catch (err) {
             setError(
                 err instanceof Error
@@ -929,6 +932,13 @@ export default function AltasClientesPage() {
                             </table>
                         </div>
                     </section>
+
+                    {/* MAPA GEOGRÁFICO - RESPETA LOS FILTROS APLICADOS */}
+                    <MapaLeadsReporte
+                        desde={fechasAplicadas.desde}
+                        hasta={fechasAplicadas.hasta}
+                        responsable={responsableAplicado}
+                    />
                 </>
             )}
         </div>

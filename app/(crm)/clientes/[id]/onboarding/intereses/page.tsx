@@ -117,7 +117,7 @@ export default function OnboardingInteresesPage() {
     async function cargarPantalla() {
         try {
             setLoading(true);
-            const [clienteRes, preguntasRes, triggersRes, respuestasRes] =
+            const [clienteRes, preguntasRes, triggersRes, respuestasRes, productosRes] =
                 await Promise.all([
                     supabase
                         .from("clientes")
@@ -144,15 +144,35 @@ export default function OnboardingInteresesPage() {
                         .select("pregunta_id, respuesta")
                         .eq("cliente_id", clienteId)
                         .eq("vigente", true),
+                    supabase
+                        .from("productos")
+                        .select("id")
+                        .eq("activo", true),
                 ]);
 
             if (clienteRes.error) throw clienteRes.error;
             if (preguntasRes.error) throw preguntasRes.error;
             if (triggersRes.error) throw triggersRes.error;
             if (respuestasRes.error) throw respuestasRes.error;
+            if (productosRes.error) throw productosRes.error;
 
-            const preguntasCargadas =
-                (preguntasRes.data ?? []) as Pregunta[];
+            // Solo considerar triggers asociados a productos activos.
+            const productosActivos = new Set(
+                (productosRes.data ?? []).map((producto) => producto.id)
+            );
+            const triggersVigentes = ((triggersRes.data ?? []) as Trigger[])
+                .filter((trigger) => productosActivos.has(trigger.producto_id));
+            const preguntasConProductoActivo = new Set(
+                triggersVigentes.map((trigger) => trigger.pregunta_id)
+            );
+
+            // Las preguntas de perfil no dependen de productos.
+            // Una pregunta trigger se muestra si al menos uno de sus productos está activo.
+            const preguntasCargadas = ((preguntasRes.data ?? []) as Pregunta[])
+                .filter((pregunta) =>
+                    pregunta.tipo_pregunta === "perfil" ||
+                    preguntasConProductoActivo.has(pregunta.id)
+                );
 
             const respuestasMapeadas =
                 mapearRespuestasGuardadas(
@@ -176,7 +196,7 @@ export default function OnboardingInteresesPage() {
 
             setCliente(clienteRes.data as Cliente);
             setPreguntas(preguntasCargadas);
-            setTriggers((triggersRes.data ?? []) as Trigger[]);
+            setTriggers(triggersVigentes);
             setRespuestas(respuestasMapeadas);
         } catch (error: any) {
             mostrarMensaje(error.message || "No se pudo cargar el relevamiento.", "error");

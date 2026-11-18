@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    Fragment,
     ChangeEvent,
     FormEvent,
     useCallback,
@@ -56,6 +57,9 @@ type Producto = {
     descripcion: string | null;
 
     precio: number | null;
+    precio_1_nombre: string | null;
+    precio_2_nombre: string | null;
+    precio_2_valor: number | null;
     moneda: string;
     modalidad_producto: ModalidadProducto;
 
@@ -140,6 +144,9 @@ type ProductoFormData = {
     descripcion: string;
 
     precio: string;
+    precio_1_nombre: string;
+    precio_2_nombre: string;
+    precio_2_valor: string;
     moneda: string;
     modalidad_producto: ModalidadProducto;
 
@@ -178,6 +185,9 @@ const FORMULARIO_INICIAL: ProductoFormData = {
     descripcion: "",
 
     precio: "",
+    precio_1_nombre: "",
+    precio_2_nombre: "",
+    precio_2_valor: "",
     moneda: "ARS",
     modalidad_producto: "cantidad",
 
@@ -375,6 +385,7 @@ function valorCambio(
 
     if (
         campo === "precio" ||
+        campo === "precio_2_valor" ||
         campo === "monto_comision_one_shot"
     ) {
         return formatearImporte(Number(valor), moneda || "ARS");
@@ -463,13 +474,15 @@ export default function ProductosPage() {
 
     const [busqueda, setBusqueda] = useState("");
     const [filtroEstado, setFiltroEstado] =
-        useState<FiltroEstado>("todos");
+        useState<FiltroEstado>("activos");
     const [filtroComision, setFiltroComision] =
         useState<FiltroComision>("todas");
     const [filtroEmpresa, setFiltroEmpresa] = useState("");
 
     const [asignacionProducto, setAsignacionProducto] = useState<Producto | null>(null);
     const [modalAbierto, setModalAbierto] = useState(false);
+    const [solapaProducto, setSolapaProducto] = useState("general");
+    const [productoExpandidoId, setProductoExpandidoId] = useState<string | null>(null);
     const [productoEditando, setProductoEditando] =
         useState<Producto | null>(null);
 
@@ -727,6 +740,7 @@ export default function ProductosPage() {
 
         setError("");
         setMensaje("");
+        setSolapaProducto("general");
         setModalAbierto(true);
     }
 
@@ -756,6 +770,9 @@ export default function ProductosPage() {
                 producto.usa_pasarela_eaya ?? false,
 
             precio: producto.precio === null ? "" : String(producto.precio),
+            precio_1_nombre: producto.precio_1_nombre ?? (producto.precio !== null ? "Precio del producto" : ""),
+            precio_2_nombre: producto.precio_2_nombre ?? "",
+            precio_2_valor: producto.precio_2_valor == null ? "" : String(producto.precio_2_valor),
             monto_minimo_colocacion: producto.monto_minimo_colocacion == null ? "" : String(producto.monto_minimo_colocacion),
             monto_maximo_colocacion: producto.monto_maximo_colocacion == null ? "" : String(producto.monto_maximo_colocacion),
             moneda: producto.moneda,
@@ -799,6 +816,7 @@ export default function ProductosPage() {
 
         setError("");
         setMensaje("");
+        setSolapaProducto("general");
         setModalAbierto(true);
     }
 
@@ -1057,17 +1075,15 @@ export default function ProductosPage() {
         }
 
         if (formulario.modalidad_producto === "cantidad") {
-            if (!formulario.precio.trim()) {
-                return "El precio del producto es obligatorio.";
-            }
-
-            const precio =
-                formulario.modalidad_producto === "cantidad"
-                    ? convertirNumero(formulario.precio)
-                    : null;
-
-            if (precio === null || !Number.isFinite(precio) || precio < 0) {
-                return "Ingresá un precio válido.";
+            if (!formulario.precio_1_nombre.trim()) return "Ingresá el nombre del Precio 1.";
+            if (!formulario.precio.trim()) return "El importe del Precio 1 es obligatorio.";
+            const precio = convertirNumero(formulario.precio);
+            if (precio === null || !Number.isFinite(precio) || precio < 0) return "Ingresá un importe válido para el Precio 1.";
+            const tieneSegundoPrecio = Boolean(formulario.precio_2_nombre.trim() || formulario.precio_2_valor.trim());
+            if (tieneSegundoPrecio) {
+                if (!formulario.precio_2_nombre.trim() || !formulario.precio_2_valor.trim()) return "Completá el nombre y el importe del Precio 2, o dejá ambos vacíos.";
+                const segundoPrecio = convertirNumero(formulario.precio_2_valor);
+                if (segundoPrecio === null || !Number.isFinite(segundoPrecio) || segundoPrecio < 0) return "Ingresá un importe válido para el Precio 2.";
             }
         }
 
@@ -1255,6 +1271,9 @@ export default function ProductosPage() {
                     formulario.descripcion.trim() || null,
 
                 precio,
+                precio_1_nombre: !esVolumen ? formulario.precio_1_nombre.trim() : null,
+                precio_2_nombre: !esVolumen && formulario.precio_2_nombre.trim() ? formulario.precio_2_nombre.trim() : null,
+                precio_2_valor: !esVolumen && formulario.precio_2_valor.trim() ? convertirNumero(formulario.precio_2_valor) : null,
                 moneda: formulario.moneda,
                 modalidad_producto: formulario.modalidad_producto,
                 monto_minimo_colocacion: esVolumen && formulario.monto_minimo_colocacion.trim()
@@ -1624,8 +1643,11 @@ export default function ProductosPage() {
             },
             {
                 key: "precio",
-                label: "Precio",
+                label: "Importe Precio 1",
             },
+            { key: "precio_1_nombre", label: "Nombre Precio 1" },
+            { key: "precio_2_nombre", label: "Nombre Precio 2" },
+            { key: "precio_2_valor", label: "Importe Precio 2" },
             {
                 key: "moneda",
                 label: "Moneda",
@@ -2003,9 +2025,6 @@ export default function ProductosPage() {
                                         <th style={styles.th}>Producto</th>
                                         <th style={styles.th}>Empresa</th>
                                         <th style={styles.th}>Precio</th>
-                                        <th style={styles.th}>Suscripción</th>
-                                        <th style={styles.th}>Formas de pago</th>
-                                        <th style={styles.th}>Condiciones</th>
                                         <th style={styles.th}>Comisión</th>
                                         <th style={styles.th}>Vigencia</th>
                                         <th style={styles.th}>Estado</th>
@@ -2015,7 +2034,8 @@ export default function ProductosPage() {
 
                                 <tbody>
                                     {productosFiltrados.map((producto) => (
-                                        <tr key={producto.id}>
+                                        <Fragment key={producto.id}>
+                                        <tr>
                                             <td style={styles.td}>
                                                 <div style={styles.productCell}>
                                                     {producto.foto_path ? (
@@ -2084,59 +2104,17 @@ export default function ProductosPage() {
 
                                             <td style={styles.td}>
                                                 <strong>
-                                                    {formatearImporte(
-                                                        producto.precio,
-                                                        producto.moneda
-                                                    )}
+                                                    {producto.modalidad_producto === "volumen"
+                                                        ? "Por volumen"
+                                                        : `${producto.precio_1_nombre || "Precio 1"}: ${formatearImporte(producto.precio, producto.moneda)}`}
                                                 </strong>
+                                                {producto.modalidad_producto !== "volumen" && producto.precio_2_valor != null && (
+                                                    <div style={styles.secondaryText}>
+                                                        {producto.precio_2_nombre || "Precio 2"}: {formatearImporte(producto.precio_2_valor, producto.moneda)}
+                                                    </div>
+                                                )}
                                             </td>
 
-                                            <td style={styles.td}>
-                                                <div style={styles.commissionType}>
-                                                    {obtenerNombreTipoSuscripcion(
-                                                        producto.tipo_suscripcion
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            <td style={styles.td}>
-                                                <div style={styles.paymentBadges}>
-                                                    {(producto.formas_pago || []).map(
-                                                        (forma) => (
-                                                            <span
-                                                                key={forma}
-                                                                style={styles.paymentBadge}
-                                                            >
-                                                                {obtenerNombreFormaPago(forma)}
-                                                            </span>
-                                                        )
-                                                    )}
-
-                                                    {(!producto.formas_pago ||
-                                                        producto.formas_pago.length === 0) && (
-                                                            <span style={styles.secondaryText}>
-                                                                Sin definir
-                                                            </span>
-                                                        )}
-                                                </div>
-                                            </td>
-                                            <td style={styles.td}>
-                                                <div style={styles.commissionType}>
-                                                    Máximo por cliente:{" "}
-                                                    {producto.maximo_por_cliente}
-                                                </div>
-                                                <div style={styles.secondaryText}>
-                                                    {producto.maximo_beneficiarios === 0
-                                                        ? "No admite beneficiarios"
-                                                        : `Hasta ${producto.maximo_beneficiarios} beneficiario${producto.maximo_beneficiarios === 1 ? "" : "s"
-                                                        }`}
-                                                </div>
-                                                <div style={styles.secondaryText}>
-                                                    {producto.usa_pasarela_eaya
-                                                        ? "Utiliza pasarela EAYA"
-                                                        : "No utiliza pasarela EAYA"}
-                                                </div>
-                                            </td>
                                             <td style={styles.td}>
                                                 <div style={styles.commissionType}>
                                                     {obtenerNombreTipoComision(
@@ -2194,106 +2172,64 @@ export default function ProductosPage() {
                                             </td>
 
                                             <td style={styles.td}>
-                                                <div style={styles.actionGroup}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            abrirEdicion(producto)
-                                                        }
-                                                        style={styles.editButton}
-                                                    >
-                                                        Editar
+                                                <div style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 170 }}>
+                                                    <button type="button" onClick={() => abrirEdicion(producto)} style={styles.editButton}>
+                                                        Editar producto
                                                     </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setAsignacionProducto(producto)}
-                                                        style={{ ...styles.editButton, color: "#166534", background: "#f0fdf4", borderColor: "#bbf7d0" }}
-                                                    >
-                                                        Asignar Canal y PDV
+                                                    <button type="button" onClick={() => setProductoExpandidoId((actual) => actual === producto.id ? null : producto.id)} style={{ ...styles.editButton, background: productoExpandidoId === producto.id ? "#e0f2fe" : "#f8fafc", color: "#075985", borderColor: "#bae6fd" }} aria-expanded={productoExpandidoId === producto.id}>
+                                                        {productoExpandidoId === producto.id ? "▲ Ver menos" : "▼ Ver más"}
                                                     </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            abrirHistorial(producto)
-                                                        }
-                                                        style={styles.historyButton}
-                                                    >
-                                                        Historial
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            cambiarEstado(producto)
-                                                        }
-                                                        disabled={
-                                                            procesandoId === producto.id
-                                                        }
-                                                        style={
-                                                            producto.activo
-                                                                ? styles.deactivateButton
-                                                                : styles.activateButton
-                                                        }
-                                                    >
-                                                        {procesandoId === producto.id
-                                                            ? "Procesando..."
-                                                            : producto.activo
-                                                                ? "Desactivar"
-                                                                : "Reactivar"}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            router.push(
-                                                                `/configuracion/productos/${producto.id}/eventos`
-                                                            )
-                                                        }
-                                                        style={styles.eventsButton}
-                                                    >
-                                                        Agregar eventos
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            router.push(
-                                                                `/configuracion/productos/${producto.id}/campos`
-                                                            )
-                                                        }
-                                                        style={styles.fieldsButton}
-                                                    >
-                                                        Campos de venta
-                                                    </button>
-                                                    <button
-                                                        onClick={() =>
-                                                            router.push(
-                                                                `/configuracion/productos/${producto.id}/preguntas`
-                                                            )
-                                                        }
-                                                        style={styles.triggerButton}
-                                                    >
-                                                        <MessageCircleQuestion size={12} />
-                                                        Preguntas trigger
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            router.push(
-                                                                `/configuracion/productos/${producto.id}/up-down`
-                                                            )
-                                                        }
-                                                        style={styles.upDownButton}
-                                                        title="Upgrade / Downgrade configurados"
-                                                    >
-                                                        <ArrowUpDown size={12} />
-
-                                                        Up & Down
-                                                        {obtenerIndicadorUpDown(producto.id)}
-                                                    </button>
+                                                    <details style={{ border: "1px solid #e2e8f0", borderRadius: 8, background: "#f8fafc", padding: "5px 8px" }}>
+                                                        <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#334155", padding: "4px 2px", userSelect: "none" }}>
+                                                            Más acciones
+                                                        </summary>
+                                                        <div style={{ display: "grid", gap: 7, padding: "9px 0 3px" }}>
+                                                            <span style={{ fontSize: 10, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: ".06em" }}>Configuración comercial</span>
+                                                            <button type="button" onClick={() => setAsignacionProducto(producto)} style={{ ...styles.editButton, color: "#166534", background: "#f0fdf4", borderColor: "#bbf7d0" }}>Asignar Canal y PDV</button>
+                                                            <button type="button" onClick={() => router.push(`/configuracion/productos/${producto.id}/eventos`)} style={styles.eventsButton}>Agregar eventos</button>
+                                                            <button type="button" onClick={() => router.push(`/configuracion/productos/${producto.id}/campos`)} style={styles.fieldsButton}>Campos de venta</button>
+                                                            <button type="button" onClick={() => router.push(`/configuracion/productos/${producto.id}/preguntas`)} style={styles.triggerButton}><MessageCircleQuestion size={12} /> Preguntas trigger</button>
+                                                            <button type="button" onClick={() => router.push(`/configuracion/productos/${producto.id}/up-down`)} style={styles.upDownButton} title="Upgrade / Downgrade configurados"><ArrowUpDown size={12} /> Up & Down {obtenerIndicadorUpDown(producto.id)}</button>
+                                                            <span style={{ fontSize: 10, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: ".06em", marginTop: 4 }}>Administración</span>
+                                                            <button type="button" onClick={() => abrirHistorial(producto)} style={styles.historyButton}>Ver historial</button>
+                                                            <button type="button" onClick={() => cambiarEstado(producto)} disabled={procesandoId === producto.id} style={producto.activo ? styles.deactivateButton : styles.activateButton}>
+                                                                {procesandoId === producto.id ? "Procesando..." : producto.activo ? "Desactivar" : "Reactivar"}
+                                                            </button>
+                                                        </div>
+                                                    </details>
                                                 </div>
                                             </td>
                                         </tr>
+                                        {productoExpandidoId === producto.id && (
+                                            <tr>
+                                                <td colSpan={7} style={{ padding: "16px 20px", background: "#f8fafc", borderBottom: "1px solid #cbd5e1" }}>
+                                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 18, fontSize: 12, color: "#334155" }}>
+                                                        <div>
+                                                            <strong style={{ display: "block", marginBottom: 7, color: "#0f172a" }}>Suscripción</strong>
+                                                            {obtenerNombreTipoSuscripcion(producto.tipo_suscripcion)}
+                                                        </div>
+                                                        <div>
+                                                            <strong style={{ display: "block", marginBottom: 7, color: "#0f172a" }}>Formas de pago</strong>
+                                                            <div style={styles.paymentBadges}>
+                                                                {(producto.formas_pago || []).length > 0 ? (producto.formas_pago || []).map((forma) => (
+                                                                    <span key={forma} style={styles.paymentBadge}>{obtenerNombreFormaPago(forma)}</span>
+                                                                )) : <span>Sin definir</span>}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <strong style={{ display: "block", marginBottom: 7, color: "#0f172a" }}>Restricciones</strong>
+                                                            <div>Máximo por cliente: {producto.maximo_por_cliente}</div>
+                                                            <div style={{ marginTop: 5 }}>{producto.maximo_beneficiarios === 0 ? "No admite beneficiarios" : `Hasta ${producto.maximo_beneficiarios} beneficiario${producto.maximo_beneficiarios === 1 ? "" : "s"}`}</div>
+                                                        </div>
+                                                        <div>
+                                                            <strong style={{ display: "block", marginBottom: 7, color: "#0f172a" }}>Pasarela de pago</strong>
+                                                            {producto.usa_pasarela_eaya ? "Utiliza pasarela EAYA" : "No utiliza pasarela EAYA"}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                        </Fragment>
                                     ))}
                                 </tbody>
                             </table>
@@ -2348,7 +2284,30 @@ export default function ProductosPage() {
                         </div>
 
                         <form onSubmit={guardarProducto}>
-                            <div style={styles.formGrid}>
+                            <div style={styles.productTabs} role="tablist" aria-label="Secciones del producto">
+                                {[
+                                    ["general", "Info General"],
+                                    ["fotos", "Fotos"],
+                                    ["pricing", "Pricing"],
+                                    ["restricciones", "Restricciones"],
+                                    ["pagos", "Formas de Pago"],
+                                    ["comision", "Comisión"],
+                                    ["final", "Seteo Final"],
+                                ].map(([clave, titulo]) => (
+                                    <button
+                                        key={clave}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={solapaProducto === clave}
+                                        onClick={() => setSolapaProducto(clave)}
+                                        style={solapaProducto === clave ? styles.productTabActive : styles.productTab}
+                                    >
+                                        {titulo}
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={styles.productTabPanel}>
+                            <div style={{ ...styles.formGrid, display: solapaProducto === "general" ? "grid" : "none" }}>
                                 <div style={styles.fullField}>
                                     <label style={styles.label}>
                                         Empresa *
@@ -2440,6 +2399,8 @@ export default function ProductosPage() {
                                     />
                                 </div>
 
+                            </div>
+                            <div style={{ ...styles.formGrid, display: solapaProducto === "fotos" ? "grid" : "none" }}>
                                 <div style={styles.fullField}>
                                     <label style={styles.label}>
                                         Foto principal (portada)
@@ -2516,6 +2477,8 @@ export default function ProductosPage() {
                                     <span style={styles.fieldHelp}>JPG, PNG o WebP. Hasta 5 MB por foto. La portada se administra arriba.</span>
                                 </div>
 
+                            </div>
+                            <div style={{ ...styles.formGrid, display: solapaProducto === "pricing" ? "grid" : "none" }}>
                                 <div style={styles.fullField}>
                                     <label style={styles.label}>
                                         Modalidad del producto *
@@ -2551,6 +2514,9 @@ export default function ProductosPage() {
                                                     ...actual,
                                                     modalidad_producto: "volumen",
                                                     precio: "",
+                                                    precio_1_nombre: "",
+                                                    precio_2_nombre: "",
+                                                    precio_2_valor: "",
                                                     porcentaje_comision_mensual: "",
                                                 }))
                                             }
@@ -2568,26 +2534,32 @@ export default function ProductosPage() {
                                 </div>
 
                                 {formulario.modalidad_producto === "cantidad" && (
-                                    <div style={styles.field}>
-                                        <label style={styles.label}>
-                                            Precio *
-                                        </label>
-
-                                        <input
-                                            type="text"
-                                            value={formulario.precio}
-                                            onChange={(evento) =>
-                                                actualizarCampo(
-                                                    "precio",
-                                                    evento.target.value
-                                                )
-                                            }
-                                            placeholder="Ej. 25000,00"
-                                            style={styles.input}
-                                            disabled={guardando}
-                                            inputMode="decimal"
-                                        />
-                                    </div>
+                                    <>
+                                        <div style={styles.field}>
+                                            <label style={styles.label}>Precio 1 — Nombre del precio *</label>
+                                            <input type="text" value={formulario.precio_1_nombre}
+                                                onChange={(e) => actualizarCampo("precio_1_nombre", e.target.value)}
+                                                placeholder="Ej. Inicio de relación" style={styles.input} disabled={guardando} />
+                                        </div>
+                                        <div style={styles.field}>
+                                            <label style={styles.label}>Precio 1 — Importe *</label>
+                                            <input type="text" value={formulario.precio}
+                                                onChange={(e) => actualizarCampo("precio", e.target.value)}
+                                                placeholder="Ej. 2500,00" style={styles.input} disabled={guardando} inputMode="decimal" />
+                                        </div>
+                                        <div style={styles.field}>
+                                            <label style={styles.label}>Precio 2 — Nombre del precio (opcional)</label>
+                                            <input type="text" value={formulario.precio_2_nombre}
+                                                onChange={(e) => actualizarCampo("precio_2_nombre", e.target.value)}
+                                                placeholder="Ej. Mantenimiento" style={styles.input} disabled={guardando} />
+                                        </div>
+                                        <div style={styles.field}>
+                                            <label style={styles.label}>Precio 2 — Importe (opcional)</label>
+                                            <input type="text" value={formulario.precio_2_valor}
+                                                onChange={(e) => actualizarCampo("precio_2_valor", e.target.value)}
+                                                placeholder="Ej. 5000,00" style={styles.input} disabled={guardando} inputMode="decimal" />
+                                        </div>
+                                    </>
                                 )}
 
                                 {formulario.modalidad_producto === "volumen" && (
@@ -2660,6 +2632,8 @@ export default function ProductosPage() {
                                         ))}
                                     </select>
                                 </div>
+                            </div>
+                            <div style={{ ...styles.formGrid, display: solapaProducto === "restricciones" ? "grid" : "none" }}>
                                 <div style={styles.field}>
                                     <label style={styles.label}>
                                         Máximo por cliente *
@@ -2715,6 +2689,8 @@ export default function ProductosPage() {
                                         el producto no permite beneficiarios.
                                     </span>
                                 </div>
+                            </div>
+                            <div style={{ ...styles.formGrid, display: solapaProducto === "pagos" ? "grid" : "none" }}>
                                 <div style={styles.field}>
                                     <label style={styles.label}>
                                         Procesamiento del pago
@@ -2794,6 +2770,8 @@ export default function ProductosPage() {
                                     </div>
                                 </div>
 
+                            </div>
+                            <div style={{ ...styles.formGrid, display: solapaProducto === "comision" ? "grid" : "none" }}>
                                 <div style={styles.fullField}>
                                     <div style={styles.sectionDivider}>
                                         Comisión de la comercializadora
@@ -2934,6 +2912,8 @@ export default function ProductosPage() {
                                         </div>
                                     )}
 
+                            </div>
+                            <div style={{ ...styles.formGrid, display: solapaProducto === "final" ? "grid" : "none" }}>
                                 <div style={styles.field}>
                                     <label style={styles.label}>
                                         Inicio de comercialización *
@@ -3010,6 +2990,7 @@ export default function ProductosPage() {
                                         </span>
                                     )}
                                 </div>
+                            </div>
                             </div>
 
                             {error && (
@@ -3231,6 +3212,41 @@ export default function ProductosPage() {
 ========================================================= */
 
 const styles: Record<string, React.CSSProperties> = {
+    productTabs: {
+        display: "flex",
+        gap: "6px",
+        overflowX: "auto",
+        padding: "10px 0 12px",
+        borderBottom: "1px solid #e2e8f0",
+        marginBottom: "18px",
+        scrollbarWidth: "thin",
+    },
+    productTab: {
+        whiteSpace: "nowrap",
+        border: "1px solid transparent",
+        background: "transparent",
+        color: "#475569",
+        fontSize: "13px",
+        fontWeight: 600,
+        padding: "10px 12px",
+        borderRadius: "8px",
+        cursor: "pointer",
+    },
+    productTabActive: {
+        whiteSpace: "nowrap",
+        border: "1px solid #bbf7d0",
+        background: "#f0fdf4",
+        color: "#166534",
+        fontSize: "13px",
+        fontWeight: 700,
+        padding: "10px 12px",
+        borderRadius: "8px",
+        cursor: "pointer",
+    },
+    productTabPanel: {
+        minHeight: "250px",
+    },
+
     page: {
         minHeight: "100vh",
         padding: "24px",
@@ -4020,7 +4036,7 @@ const styles: Record<string, React.CSSProperties> = {
         borderRadius: "9px",
         background: "#fffbeb",
         color: "#b45309",
-        fontSize: "14px",
+        fontSize: "12px",
         fontWeight: 700,
         cursor: "pointer",
         transition: "all 0.2s ease",

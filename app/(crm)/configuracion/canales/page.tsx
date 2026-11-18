@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import RubrosTab from "./components/RubrosTab";
 
 type TipoCatalogo = "canales" | "zonas" | "banderas" | "retails";
 
@@ -86,6 +87,7 @@ const formularioInicial: FormularioCatalogo = {
 };
 
 export default function EstructuraComercialPage() {
+    const [rubrosActivo, setRubrosActivo] = useState(false);
     const [catalogoActivo, setCatalogoActivo] =
         useState<TipoCatalogo>("canales");
 
@@ -157,6 +159,7 @@ export default function EstructuraComercialPage() {
     function cambiarCatalogo(tipo: TipoCatalogo) {
         if (guardando) return;
 
+        setRubrosActivo(false);
         setCatalogoActivo(tipo);
         setBusqueda("");
         setFiltroEstado("todos");
@@ -581,7 +584,7 @@ export default function EstructuraComercialPage() {
                         ];
 
                     const activo =
-                        catalogoActivo === tipo;
+                        !rubrosActivo && catalogoActivo === tipo;
 
                     return (
                         <button
@@ -602,8 +605,10 @@ export default function EstructuraComercialPage() {
                         </button>
                     );
                 })}
+                <button type="button" onClick={() => { setRubrosActivo(true); setError(""); setMensaje(""); setModalAbierto(false); }} style={rubrosActivo ? styles.tabActive : styles.tab}>Rubros</button>
             </div>
 
+            {rubrosActivo ? <RubrosTab /> : <>
             <div style={styles.sectionHeader}>
                 <div>
                     <h2
@@ -1084,6 +1089,7 @@ export default function EstructuraComercialPage() {
                     </div>
                 </div>
             )}
+            </>}
         </div>
     );
 }
@@ -1123,12 +1129,13 @@ const styles: Record<string, React.CSSProperties> = {
     tabs: {
         display: "grid",
         gridTemplateColumns:
-            "repeat(4, minmax(0, 1fr))",
+            "repeat(5, minmax(0, 1fr))",
         gap: "8px",
         padding: "6px",
         marginBottom: "28px",
         background: "#f3f4f6",
         borderRadius: "12px",
+        overflowX: "auto",
     },
 
     tab: {

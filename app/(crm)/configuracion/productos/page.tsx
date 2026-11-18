@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { supabase } from "@/lib/supabase";
+import AsignarCanalPDV from "./AsignarCanalPDV";
 import { useUser } from "@/app/context/UserContext";
 import { useRouter } from "next/navigation";
 import {
@@ -64,7 +65,6 @@ type Producto = {
     maximo_por_cliente: number;
     maximo_beneficiarios: number;
     usa_pasarela_eaya: boolean;
-    requiere_validacion: boolean;
 
     tipo_comision: TipoComision;
     monto_comision_one_shot: number | null;
@@ -77,6 +77,8 @@ type Producto = {
     fecha_fin: string | null;
 
     foto_path: string | null;
+    rubro_id: string | null;
+    subrubro_id: string | null;
 
     activo: boolean;
 
@@ -85,8 +87,6 @@ type Producto = {
 
     created_at: string;
     updated_at: string;
-
-
 
     empresas?: {
         id: string;
@@ -127,7 +127,14 @@ type ProductoHistorial = {
     datos_nuevos: Record<string, any> | null;
 };
 
+type Catalogo = { id: string; nombre: string; activo: boolean };
+type SubrubroCatalogo = Catalogo & { rubro_id: string };
+type ImagenAdicional = { id: string; producto_id: string; imagen_path: string; orden: number };
+type FotoExtra = { orden: number; archivo?: File; path?: string; preview: string };
+
 type ProductoFormData = {
+    rubro_id: string;
+    subrubro_id: string;
     empresa_id: string;
     nombre: string;
     descripcion: string;
@@ -142,7 +149,6 @@ type ProductoFormData = {
     maximo_por_cliente: string;
     maximo_beneficiarios: string;
     usa_pasarela_eaya: boolean;
-    requiere_validacion: boolean;
 
     tipo_comision: TipoComision;
     monto_comision_one_shot: string;
@@ -158,12 +164,15 @@ type ProductoFormData = {
 };
 
 type FiltroEstado = "todos" | "activos" | "inactivos";
+type FiltroComision = "todas" | TipoComision;
 
 /* =========================================================
    CONSTANTES
 ========================================================= */
 
 const FORMULARIO_INICIAL: ProductoFormData = {
+    rubro_id: "",
+    subrubro_id: "",
     empresa_id: "",
     nombre: "",
     descripcion: "",
@@ -178,7 +187,6 @@ const FORMULARIO_INICIAL: ProductoFormData = {
     maximo_por_cliente: "1",
     maximo_beneficiarios: "0",
     usa_pasarela_eaya: false,
-    requiere_validacion: false,
 
     tipo_comision: "one_shot",
     monto_comision_one_shot: "",
@@ -414,9 +422,6 @@ function valorCambio(
         return `${cantidad} beneficiario${cantidad === 1 ? "" : "s"
             }`;
     }
-    if (campo === "requiere_validacion") {
-        return valor ? "Sí" : "No";
-    }
     if (campo === "usa_pasarela_eaya") {
         return valor ? "Sí" : "No";
     }
@@ -445,6 +450,10 @@ export default function ProductosPage() {
         useState<Record<string, ProductoUpDown>>({});
     const [productos, setProductos] = useState<Producto[]>([]);
     const [empresas, setEmpresas] = useState<Empresa[]>([]);
+    const [rubros, setRubros] = useState<Catalogo[]>([]);
+    const [subrubros, setSubrubros] = useState<SubrubroCatalogo[]>([]);
+    const [fotosExtras, setFotosExtras] = useState<FotoExtra[]>([]);
+    const [imagenesProductos, setImagenesProductos] = useState<ImagenAdicional[]>([]);
 
     const [loading, setLoading] = useState(true);
     const [guardando, setGuardando] = useState(false);
@@ -455,8 +464,11 @@ export default function ProductosPage() {
     const [busqueda, setBusqueda] = useState("");
     const [filtroEstado, setFiltroEstado] =
         useState<FiltroEstado>("todos");
+    const [filtroComision, setFiltroComision] =
+        useState<FiltroComision>("todas");
     const [filtroEmpresa, setFiltroEmpresa] = useState("");
 
+    const [asignacionProducto, setAsignacionProducto] = useState<Producto | null>(null);
     const [modalAbierto, setModalAbierto] = useState(false);
     const [productoEditando, setProductoEditando] =
         useState<Producto | null>(null);
@@ -503,6 +515,24 @@ export default function ProductosPage() {
         }
 
         setEmpresas((data ?? []) as Empresa[]);
+    }, []);
+
+    const cargarCatalogos = useCallback(async () => {
+        const [r, sr] = await Promise.all([
+            supabase.from("rubros").select("id,nombre,activo").order("nombre"),
+            supabase.from("subrubros").select("id,rubro_id,nombre,activo").order("nombre"),
+        ]);
+        if (r.error) throw r.error;
+        if (sr.error) throw sr.error;
+        setRubros((r.data ?? []) as Catalogo[]);
+        setSubrubros((sr.data ?? []) as SubrubroCatalogo[]);
+    }, []);
+
+    const cargarImagenes = useCallback(async () => {
+        const { data, error: err } = await supabase.from("producto_imagenes")
+            .select("id,producto_id,imagen_path,orden").order("orden");
+        if (err) throw err;
+        setImagenesProductos((data ?? []) as ImagenAdicional[]);
     }, []);
 
     /* =======================================================
@@ -574,6 +604,8 @@ export default function ProductosPage() {
                 cargarEmpresas(),
                 cargarProductos(),
                 cargarConfiguracionesUpDown(),
+                cargarCatalogos(),
+                cargarImagenes(),
             ]);
         } catch (err) {
             console.error("Error cargando configuración:", err);
@@ -587,6 +619,8 @@ export default function ProductosPage() {
         cargarEmpresas,
         cargarProductos,
         cargarConfiguracionesUpDown,
+        cargarCatalogos,
+        cargarImagenes,
     ]);
 
     useEffect(() => {
@@ -647,6 +681,10 @@ export default function ProductosPage() {
                 (filtroEstado === "inactivos" &&
                     !producto.activo);
 
+            const coincideComision =
+                filtroComision === "todas" ||
+                producto.tipo_comision === filtroComision;
+
             const coincideEmpresa =
                 !filtroEmpresa ||
                 producto.empresa_id === filtroEmpresa;
@@ -654,6 +692,7 @@ export default function ProductosPage() {
             return (
                 coincideBusqueda &&
                 coincideEstado &&
+                coincideComision &&
                 coincideEmpresa
             );
         });
@@ -661,6 +700,7 @@ export default function ProductosPage() {
         productos,
         busqueda,
         filtroEstado,
+        filtroComision,
         filtroEmpresa,
     ]);
 
@@ -683,6 +723,7 @@ export default function ProductosPage() {
         setFotoArchivo(null);
         setFotoPreview("");
         setEliminarFotoActual(false);
+        setFotosExtras([]);
 
         setError("");
         setMensaje("");
@@ -697,6 +738,8 @@ export default function ProductosPage() {
         setProductoEditando(producto);
 
         setFormulario({
+            rubro_id: producto.rubro_id ?? "",
+            subrubro_id: producto.subrubro_id ?? "",
             empresa_id: producto.empresa_id,
             nombre: producto.nombre,
             descripcion: producto.descripcion ?? "",
@@ -711,7 +754,6 @@ export default function ProductosPage() {
 
             usa_pasarela_eaya:
                 producto.usa_pasarela_eaya ?? false,
-            requiere_validacion: producto.requiere_validacion ?? false,
 
             precio: producto.precio === null ? "" : String(producto.precio),
             monto_minimo_colocacion: producto.monto_minimo_colocacion == null ? "" : String(producto.monto_minimo_colocacion),
@@ -752,6 +794,8 @@ export default function ProductosPage() {
                 : ""
         );
         setEliminarFotoActual(false);
+        setFotosExtras(imagenesProductos.filter(i => i.producto_id === producto.id)
+            .map(i => ({ orden: i.orden, path: i.imagen_path, preview: obtenerUrlFoto(i.imagen_path) })));
 
         setError("");
         setMensaje("");
@@ -767,6 +811,8 @@ export default function ProductosPage() {
             URL.revokeObjectURL(fotoPreview);
         }
 
+        fotosExtras.forEach(f => { if (f.preview.startsWith("blob:")) URL.revokeObjectURL(f.preview); });
+        setFotosExtras([]);
         setModalAbierto(false);
         setProductoEditando(null);
         setFormulario(FORMULARIO_INICIAL);
@@ -875,6 +921,55 @@ export default function ProductosPage() {
         setError("");
     }
 
+    function seleccionarFotoExtra(evento: ChangeEvent<HTMLInputElement>, orden: number) {
+        const archivo = evento.target.files?.[0];
+        if (!archivo) return;
+        if (!["image/jpeg", "image/png", "image/webp"].includes(archivo.type) || archivo.size > 5 * 1024 * 1024) {
+            setError("Cada imagen debe ser JPG, PNG o WebP y pesar hasta 5 MB.");
+            evento.target.value = "";
+            return;
+        }
+        setFotosExtras(actual => {
+            const previa = actual.find(f => f.orden === orden);
+            if (previa?.preview.startsWith("blob:")) URL.revokeObjectURL(previa.preview);
+            return [...actual.filter(f => f.orden !== orden), { orden, archivo, preview: URL.createObjectURL(archivo) }].sort((a,b) => a.orden-b.orden);
+        });
+        setError("");
+        evento.target.value = "";
+    }
+
+    async function sincronizarFotosExtras(productoId: string) {
+        const anteriores = imagenesProductos.filter(i => i.producto_id === productoId);
+        const nuevasRutas: string[] = [];
+        const filas: { producto_id: string; imagen_path: string; orden: number }[] = [];
+        try {
+            for (const foto of fotosExtras) {
+                let path = foto.path;
+                if (foto.archivo) {
+                    path = await subirFotoProducto(foto.archivo, productoId);
+                    nuevasRutas.push(path);
+                }
+                if (path) filas.push({ producto_id: productoId, imagen_path: path, orden: foto.orden });
+            }
+            // Primero borrar registros anteriores; las imágenes físicas se eliminan después de confirmar.
+            const { error: delError } = await supabase.from("producto_imagenes").delete().eq("producto_id", productoId);
+            if (delError) throw delError;
+            if (filas.length) {
+                const { error: insError } = await supabase.from("producto_imagenes").insert(filas);
+                if (insError) {
+                    if (anteriores.length) await supabase.from("producto_imagenes").insert(anteriores.map(i => ({producto_id: i.producto_id, imagen_path: i.imagen_path, orden: i.orden})));
+                    throw insError;
+                }
+            }
+            for (const vieja of anteriores) {
+                if (!filas.some(f => f.imagen_path === vieja.imagen_path)) await eliminarFotoStorage(vieja.imagen_path);
+            }
+        } catch (err) {
+            for (const path of nuevasRutas) await eliminarFotoStorage(path);
+            throw err;
+        }
+    }
+
     async function subirFotoProducto(
         archivo: File,
         productoId: string
@@ -971,11 +1066,7 @@ export default function ProductosPage() {
                     ? convertirNumero(formulario.precio)
                     : null;
 
-            if (
-                precio === null ||
-                !Number.isFinite(precio) ||
-                precio < 0
-            ) {
+            if (!Number.isFinite(precio) || precio < 0) {
                 return "Ingresá un precio válido.";
             }
         }
@@ -1150,7 +1241,14 @@ export default function ProductosPage() {
                 formulario.maximo_beneficiarios
             );
 
+            const rubro = rubros.find(r => r.id === formulario.rubro_id);
+            const subrubro = subrubros.find(sr => sr.id === formulario.subrubro_id);
+            if (formulario.rubro_id && (!rubro || (!rubro.activo && rubro.id !== productoEditando?.rubro_id))) throw new Error("El rubro no está disponible.");
+            if (formulario.subrubro_id && (!subrubro || subrubro.rubro_id !== formulario.rubro_id || (!subrubro.activo && subrubro.id !== productoEditando?.subrubro_id))) throw new Error("El subrubro no corresponde al rubro seleccionado o está inactivo.");
+
             const datosProducto = {
+                rubro_id: formulario.rubro_id || null,
+                subrubro_id: formulario.subrubro_id || null,
                 empresa_id: formulario.empresa_id,
                 nombre: formulario.nombre.trim(),
                 descripcion:
@@ -1184,7 +1282,6 @@ export default function ProductosPage() {
 
                 maximo_por_cliente: maximoPorCliente,
                 usa_pasarela_eaya: formulario.usa_pasarela_eaya,
-                requiere_validacion: formulario.requiere_validacion,
 
                 activo: formulario.fecha_fin
                     ? false
@@ -1247,6 +1344,8 @@ export default function ProductosPage() {
                     );
                 }
 
+                await sincronizarFotosExtras(productoEditando.id);
+
                 setMensaje(
                     "Producto actualizado correctamente."
                 );
@@ -1291,11 +1390,13 @@ export default function ProductosPage() {
                     }
                 }
 
+                await sincronizarFotosExtras(productoCreado.id);
+
                 setMensaje(
                     "Producto creado correctamente."
                 );
             }
-            await cargarProductos();
+            await Promise.all([cargarProductos(), cargarImagenes()]);
 
             if (fotoPreview.startsWith("blob:")) {
                 URL.revokeObjectURL(fotoPreview);
@@ -1307,6 +1408,8 @@ export default function ProductosPage() {
             setFotoArchivo(null);
             setFotoPreview("");
             setEliminarFotoActual(false);
+            fotosExtras.forEach(f => { if (f.preview.startsWith("blob:")) URL.revokeObjectURL(f.preview); });
+            setFotosExtras([]);
         } catch (err: any) {
             console.error("Error guardando producto:", err);
 
@@ -1548,10 +1651,6 @@ export default function ProductosPage() {
                 label: "Utiliza pasarela EAYA",
             },
             {
-                key: "requiere_validacion",
-                label: "Requiere validación de identidad",
-            },
-            {
                 key: "tipo_comision",
                 label: "Tipo de comisión",
             },
@@ -1782,6 +1881,28 @@ export default function ProductosPage() {
                                     {!empresa.activo ? " - Inactiva" : ""}
                                 </option>
                             ))}
+                        </select>
+                    </div>
+
+                    <div style={styles.filterField}>
+                        <label style={styles.label}>
+                            Tipo de comisión
+                        </label>
+
+                        <select
+                            value={filtroComision}
+                            onChange={(evento) =>
+                                setFiltroComision(
+                                    evento.target.value as FiltroComision
+                                )
+                            }
+                            style={styles.select}
+                        >
+                            <option value="todas">Todas</option>
+                            <option value="one_shot">One-shot</option>
+                            <option value="mensual">
+                                Comisión mensual
+                            </option>
                         </select>
                     </div>
 
@@ -2018,21 +2139,27 @@ export default function ProductosPage() {
                                             </td>
                                             <td style={styles.td}>
                                                 <div style={styles.commissionType}>
-                                                    {producto.modalidad_producto === "volumen" && producto.tipo_comision === "mensual"
-                                                        ? "Comisión variable"
-                                                        : obtenerNombreTipoComision(producto.tipo_comision)}
+                                                    {obtenerNombreTipoComision(
+                                                        producto.tipo_comision
+                                                    )}
                                                 </div>
 
                                                 <div style={styles.secondaryText}>
                                                     {producto.tipo_comision === "one_shot"
-                                                        ? formatearImporte(producto.monto_comision_one_shot, producto.moneda)
-                                                        : producto.modalidad_producto === "volumen"
-                                                            ? producto.tipo_comision === "mensual"
-                                                                ? `${formatearPorcentaje(producto.porcentaje_comision_volumen)} sobre monto colocado`
-                                                                : `${formatearImporte(producto.monto_comision_one_shot, producto.moneda)} + ${formatearPorcentaje(producto.porcentaje_comision_volumen)} sobre monto colocado`
-                                                            : producto.tipo_comision === "mensual"
-                                                                ? formatearPorcentaje(producto.porcentaje_comision_mensual)
-                                                                : `${formatearImporte(producto.monto_comision_one_shot, producto.moneda)} + ${formatearPorcentaje(producto.porcentaje_comision_mensual)} mensual`}
+                                                        ? formatearImporte(
+                                                            producto.monto_comision_one_shot,
+                                                            producto.moneda
+                                                        )
+                                                        : producto.tipo_comision === "mensual"
+                                                            ? formatearPorcentaje(
+                                                                producto.porcentaje_comision_mensual
+                                                            )
+                                                            : `${formatearImporte(
+                                                                producto.monto_comision_one_shot,
+                                                                producto.moneda
+                                                            )} + ${formatearPorcentaje(
+                                                                producto.porcentaje_comision_mensual
+                                                            )} mensual`}
                                                 </div>
                                             </td>
 
@@ -2076,6 +2203,14 @@ export default function ProductosPage() {
                                                         style={styles.editButton}
                                                     >
                                                         Editar
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setAsignacionProducto(producto)}
+                                                        style={{ ...styles.editButton, color: "#166534", background: "#f0fdf4", borderColor: "#bbf7d0" }}
+                                                    >
+                                                        Asignar Canal y PDV
                                                     </button>
 
                                                     <button
@@ -2169,6 +2304,14 @@ export default function ProductosPage() {
 
             {/* MODAL ALTA / EDICIÓN */}
 
+            {asignacionProducto && (
+                <AsignarCanalPDV
+                    productoId={asignacionProducto.id}
+                    productoNombre={asignacionProducto.nombre}
+                    onClose={() => setAsignacionProducto(null)}
+                />
+            )}
+
             {modalAbierto && (
                 <div
                     style={styles.modalOverlay}
@@ -2242,6 +2385,20 @@ export default function ProductosPage() {
                                 </div>
 
                                 <div style={styles.fullField}>
+                                    <label style={styles.label}>Rubro</label>
+                                    <select value={formulario.rubro_id} onChange={e => setFormulario(a => ({...a, rubro_id: e.target.value, subrubro_id: ""}))} style={styles.select} disabled={guardando}>
+                                        <option value="">Seleccionar rubro</option>
+                                        {rubros.filter(r => r.activo || r.id === formulario.rubro_id).map(r => <option key={r.id} value={r.id}>{r.nombre}{!r.activo ? " (inactivo)" : ""}</option>)}
+                                    </select>
+                                </div>
+                                <div style={styles.fullField}>
+                                    <label style={styles.label}>Subrubro</label>
+                                    <select value={formulario.subrubro_id} onChange={e => actualizarCampo("subrubro_id", e.target.value)} style={styles.select} disabled={guardando || !formulario.rubro_id}>
+                                        <option value="">Seleccionar subrubro</option>
+                                        {subrubros.filter(sr => sr.rubro_id === formulario.rubro_id && (sr.activo || sr.id === formulario.subrubro_id)).map(sr => <option key={sr.id} value={sr.id}>{sr.nombre}{!sr.activo ? " (inactivo)" : ""}</option>)}
+                                    </select>
+                                </div>
+                                <div style={styles.fullField}>
                                     <label style={styles.label}>
                                         Nombre del producto *
                                     </label>
@@ -2285,7 +2442,7 @@ export default function ProductosPage() {
 
                                 <div style={styles.fullField}>
                                     <label style={styles.label}>
-                                        Foto del producto
+                                        Foto principal (portada)
                                     </label>
 
                                     <input
@@ -2338,6 +2495,25 @@ export default function ProductosPage() {
                                             </button>
                                         </div>
                                     )}
+                                </div>
+
+                                <div style={styles.fullField}>
+                                    <label style={styles.label}>Galería adicional (hasta 4 fotos)</label>
+                                    <div style={{display:"grid", gridTemplateColumns:"repeat(2, minmax(0, 1fr))", gap:12}}>
+                                        {[1,2,3,4].map(orden => {
+                                            const foto = fotosExtras.find(f => f.orden === orden);
+                                            return <div key={orden} style={{border:"1px solid #cbd5e1", borderRadius:10, padding:12, background:"#f8fafc"}}>
+                                                <div style={{fontWeight:600, marginBottom:8, color:"#166534"}}>Foto adicional {orden}</div>
+                                                {foto && <img src={foto.preview} alt={`Foto adicional ${orden}`} style={{width:"100%", height:110, objectFit:"contain", marginBottom:8}} />}
+                                                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => seleccionarFotoExtra(e, orden)} disabled={guardando} style={{maxWidth:"100%", color:"#111827"}} />
+                                                {foto && <button type="button" disabled={guardando} onClick={() => {
+                                                    if (foto.preview.startsWith("blob:")) URL.revokeObjectURL(foto.preview);
+                                                    setFotosExtras(a => a.filter(f => f.orden !== orden));
+                                                }} style={{marginTop:8, padding:"6px 10px", border:"1px solid #fecaca", background:"#fef2f2", color:"#b91c1c", borderRadius:6}}>Quitar</button>}
+                                            </div>;
+                                        })}
+                                    </div>
+                                    <span style={styles.fieldHelp}>JPG, PNG o WebP. Hasta 5 MB por foto. La portada se administra arriba.</span>
                                 </div>
 
                                 <div style={styles.fullField}>
@@ -2571,38 +2747,6 @@ export default function ProductosPage() {
                                             <span style={styles.checkboxDescription}>
                                                 El pago del producto será procesado mediante
                                                 la pasarela de EAYA.
-                                            </span>
-                                        </div>
-                                    </label>
-                                </div>
-                                <div style={styles.fullField}>
-                                    <label style={styles.label}>
-                                        Validación de identidad
-                                    </label>
-                                    <label
-                                        style={
-                                            formulario.requiere_validacion
-                                                ? styles.checkboxCardActive
-                                                : styles.checkboxCard
-                                        }
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={formulario.requiere_validacion}
-                                            onChange={(evento) =>
-                                                actualizarCampo(
-                                                    "requiere_validacion",
-                                                    evento.target.checked
-                                                )
-                                            }
-                                            disabled={guardando}
-                                        />
-                                        <div>
-                                            <strong>Requiere validación</strong>
-                                            <span style={styles.checkboxDescription}>
-                                                Las operaciones comerciales de este producto
-                                                deberán iniciar una verificación de identidad VU
-                                                independiente por operación.
                                             </span>
                                         </div>
                                     </label>

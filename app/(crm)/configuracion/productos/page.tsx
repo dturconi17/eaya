@@ -932,7 +932,7 @@ export default function ProductosPage() {
         setFotosExtras(actual => {
             const previa = actual.find(f => f.orden === orden);
             if (previa?.preview.startsWith("blob:")) URL.revokeObjectURL(previa.preview);
-            return [...actual.filter(f => f.orden !== orden), { orden, archivo, preview: URL.createObjectURL(archivo) }].sort((a,b) => a.orden-b.orden);
+            return [...actual.filter(f => f.orden !== orden), { orden, archivo, preview: URL.createObjectURL(archivo) }].sort((a, b) => a.orden - b.orden);
         });
         setError("");
         evento.target.value = "";
@@ -957,7 +957,7 @@ export default function ProductosPage() {
             if (filas.length) {
                 const { error: insError } = await supabase.from("producto_imagenes").insert(filas);
                 if (insError) {
-                    if (anteriores.length) await supabase.from("producto_imagenes").insert(anteriores.map(i => ({producto_id: i.producto_id, imagen_path: i.imagen_path, orden: i.orden})));
+                    if (anteriores.length) await supabase.from("producto_imagenes").insert(anteriores.map(i => ({ producto_id: i.producto_id, imagen_path: i.imagen_path, orden: i.orden })));
                     throw insError;
                 }
             }
@@ -1066,7 +1066,7 @@ export default function ProductosPage() {
                     ? convertirNumero(formulario.precio)
                     : null;
 
-            if (!Number.isFinite(precio) || precio < 0) {
+            if (precio === null || !Number.isFinite(precio) || precio < 0) {
                 return "Ingresá un precio válido.";
             }
         }
@@ -2386,7 +2386,7 @@ export default function ProductosPage() {
 
                                 <div style={styles.fullField}>
                                     <label style={styles.label}>Rubro</label>
-                                    <select value={formulario.rubro_id} onChange={e => setFormulario(a => ({...a, rubro_id: e.target.value, subrubro_id: ""}))} style={styles.select} disabled={guardando}>
+                                    <select value={formulario.rubro_id} onChange={e => setFormulario(a => ({ ...a, rubro_id: e.target.value, subrubro_id: "" }))} style={styles.select} disabled={guardando}>
                                         <option value="">Seleccionar rubro</option>
                                         {rubros.filter(r => r.activo || r.id === formulario.rubro_id).map(r => <option key={r.id} value={r.id}>{r.nombre}{!r.activo ? " (inactivo)" : ""}</option>)}
                                     </select>
@@ -2499,17 +2499,17 @@ export default function ProductosPage() {
 
                                 <div style={styles.fullField}>
                                     <label style={styles.label}>Galería adicional (hasta 4 fotos)</label>
-                                    <div style={{display:"grid", gridTemplateColumns:"repeat(2, minmax(0, 1fr))", gap:12}}>
-                                        {[1,2,3,4].map(orden => {
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                                        {[1, 2, 3, 4].map(orden => {
                                             const foto = fotosExtras.find(f => f.orden === orden);
-                                            return <div key={orden} style={{border:"1px solid #cbd5e1", borderRadius:10, padding:12, background:"#f8fafc"}}>
-                                                <div style={{fontWeight:600, marginBottom:8, color:"#166534"}}>Foto adicional {orden}</div>
-                                                {foto && <img src={foto.preview} alt={`Foto adicional ${orden}`} style={{width:"100%", height:110, objectFit:"contain", marginBottom:8}} />}
-                                                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => seleccionarFotoExtra(e, orden)} disabled={guardando} style={{maxWidth:"100%", color:"#111827"}} />
+                                            return <div key={orden} style={{ border: "1px solid #cbd5e1", borderRadius: 10, padding: 12, background: "#f8fafc" }}>
+                                                <div style={{ fontWeight: 600, marginBottom: 8, color: "#166534" }}>Foto adicional {orden}</div>
+                                                {foto && <img src={foto.preview} alt={`Foto adicional ${orden}`} style={{ width: "100%", height: 110, objectFit: "contain", marginBottom: 8 }} />}
+                                                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => seleccionarFotoExtra(e, orden)} disabled={guardando} style={{ maxWidth: "100%", color: "#111827" }} />
                                                 {foto && <button type="button" disabled={guardando} onClick={() => {
                                                     if (foto.preview.startsWith("blob:")) URL.revokeObjectURL(foto.preview);
                                                     setFotosExtras(a => a.filter(f => f.orden !== orden));
-                                                }} style={{marginTop:8, padding:"6px 10px", border:"1px solid #fecaca", background:"#fef2f2", color:"#b91c1c", borderRadius:6}}>Quitar</button>}
+                                                }} style={{ marginTop: 8, padding: "6px 10px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", borderRadius: 6 }}>Quitar</button>}
                                             </div>;
                                         })}
                                     </div>

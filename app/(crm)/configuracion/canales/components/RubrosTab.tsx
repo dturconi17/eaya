@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import LandingEditor from "./LandingEditor";
 
 type Rubro = { id: string; nombre: string; activo: boolean; created_at: string };
 type Subrubro = { id: string; rubro_id: string; nombre: string; activo: boolean; created_at: string };
@@ -30,18 +31,27 @@ export default function RubrosTab() {
   const [estado, setEstado] = useState<Estado>("todos");
   const [rubroFiltro, setRubroFiltro] = useState("todos");
   const [edicion, setEdicion] = useState<Edicion | null>(null);
+  const [landingEditando, setLandingEditando] = useState<{ clase: "rubro" | "subrubro"; id: string; nombre: string } | null>(null);
+  const [landingRubros, setLandingRubros] = useState<Record<string, string>>({});
+  const [landingSubrubros, setLandingSubrubros] = useState<Record<string, string>>({});
 
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [r, s] = await Promise.all([
+      const [r, s, lr, ls] = await Promise.all([
         supabase.from("rubros").select("id,nombre,activo,created_at").order("nombre"),
         supabase.from("subrubros").select("id,rubro_id,nombre,activo,created_at").order("nombre"),
+        supabase.from("landing_rubros").select("rubro_id,estado"),
+        supabase.from("landing_subrubros").select("subrubro_id,estado"),
       ]);
       if (r.error) throw r.error;
       if (s.error) throw s.error;
+      if (lr.error) throw lr.error;
+      if (ls.error) throw ls.error;
       setRubros((r.data ?? []) as Rubro[]);
       setSubrubros((s.data ?? []) as Subrubro[]);
+      setLandingRubros(Object.fromEntries((lr.data ?? []).map(x => [x.rubro_id, x.estado])));
+      setLandingSubrubros(Object.fromEntries((ls.data ?? []).map(x => [x.subrubro_id, x.estado])));
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudieron cargar los rubros y subrubros.");
     } finally { setCargando(false); }
@@ -129,19 +139,20 @@ export default function RubrosTab() {
     {cargando ? <p>Cargando catálogos...</p> : <div style={{ display: "grid", gap: 24 }}>
       <section style={sectionStyle}>
         <h3 style={headingStyle}>Rubros ({visiblesRubros.length})</h3>
-        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr style={{ background: "#f8fafc" }}><th style={cell}>Rubro</th><th style={cell}>Subrubros</th><th style={cell}>Estado</th><th style={cell}>Acciones</th></tr></thead><tbody>
-          {visiblesRubros.map(r => <tr key={r.id}><td style={cell}><strong>{r.nombre}</strong></td><td style={cell}>{subrubros.filter(s => s.rubro_id === r.id).length}</td><td style={cell}><span style={statusBadge(r.activo)}>{r.activo ? "● Activo" : "● Inactivo"}</span></td><td style={cell}><div style={{ display: "flex", gap: 8 }}><button type="button" style={editButton} onClick={() => setEdicion({ clase: "rubro", id: r.id, nombre: r.nombre, rubro_id: "", activo: r.activo })}>Editar</button><button type="button" style={r.activo ? deactivateButton : activateButton} disabled={guardando} onClick={() => void alternar("rubro", r)}>{r.activo ? "Inactivar" : "Activar"}</button></div></td></tr>)}
-          {!visiblesRubros.length && <tr><td style={cell} colSpan={4}>No hay rubros para mostrar.</td></tr>}
+        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr style={{ background: "#f8fafc" }}><th style={cell}>Rubro</th><th style={cell}>Subrubros</th><th style={cell}>Estado</th><th style={cell}>Landing web</th><th style={cell}>Acciones</th></tr></thead><tbody>
+          {visiblesRubros.map(r => <tr key={r.id}><td style={cell}><strong>{r.nombre}</strong></td><td style={cell}>{subrubros.filter(s => s.rubro_id === r.id).length}</td><td style={cell}><span style={statusBadge(r.activo)}>{r.activo ? "● Activo" : "● Inactivo"}</span></td><td style={cell}>{landingRubros[r.id] ?? "Sin configurar"}</td><td style={cell}><div style={{ display: "flex", gap: 8 }}><button type="button" style={editButton} onClick={() => setEdicion({ clase: "rubro", id: r.id, nombre: r.nombre, rubro_id: "", activo: r.activo })}>Editar</button><button type="button" style={btn} onClick={() => setLandingEditando({ clase: "rubro", id: r.id, nombre: r.nombre })}>Editar landing</button><button type="button" style={r.activo ? deactivateButton : activateButton} disabled={guardando} onClick={() => void alternar("rubro", r)}>{r.activo ? "Inactivar" : "Activar"}</button></div></td></tr>)}
+          {!visiblesRubros.length && <tr><td style={cell} colSpan={5}>No hay rubros para mostrar.</td></tr>}
         </tbody></table></div>
       </section>
       <section style={sectionStyle}>
         <h3 style={headingStyle}>Subrubros ({visiblesSubrubros.length})</h3>
-        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr style={{ background: "#f8fafc" }}><th style={cell}>Subrubro</th><th style={cell}>Rubro padre</th><th style={cell}>Estado</th><th style={cell}>Acciones</th></tr></thead><tbody>
-          {visiblesSubrubros.map(s => <tr key={s.id}><td style={cell}><strong>{s.nombre}</strong></td><td style={cell}>{rubros.find(r => r.id === s.rubro_id)?.nombre ?? "Sin rubro"}</td><td style={cell}><span style={statusBadge(s.activo)}>{s.activo ? "● Activo" : "● Inactivo"}</span></td><td style={cell}><div style={{ display: "flex", gap: 8 }}><button type="button" style={editButton} onClick={() => setEdicion({ clase: "subrubro", id: s.id, nombre: s.nombre, rubro_id: s.rubro_id, activo: s.activo })}>Editar</button><button type="button" style={s.activo ? deactivateButton : activateButton} disabled={guardando} onClick={() => void alternar("subrubro", s)}>{s.activo ? "Inactivar" : "Activar"}</button></div></td></tr>)}
-          {!visiblesSubrubros.length && <tr><td style={cell} colSpan={4}>No hay subrubros para mostrar.</td></tr>}
+        <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr style={{ background: "#f8fafc" }}><th style={cell}>Subrubro</th><th style={cell}>Rubro padre</th><th style={cell}>Estado</th><th style={cell}>Landing web</th><th style={cell}>Acciones</th></tr></thead><tbody>
+          {visiblesSubrubros.map(s => <tr key={s.id}><td style={cell}><strong>{s.nombre}</strong></td><td style={cell}>{rubros.find(r => r.id === s.rubro_id)?.nombre ?? "Sin rubro"}</td><td style={cell}><span style={statusBadge(s.activo)}>{s.activo ? "● Activo" : "● Inactivo"}</span></td><td style={cell}>{landingSubrubros[s.id] ?? "Sin configurar"}</td><td style={cell}><div style={{ display: "flex", gap: 8 }}><button type="button" style={editButton} onClick={() => setEdicion({ clase: "subrubro", id: s.id, nombre: s.nombre, rubro_id: s.rubro_id, activo: s.activo })}>Editar</button><button type="button" style={btn} onClick={() => setLandingEditando({ clase: "subrubro", id: s.id, nombre: s.nombre })}>Editar landing</button><button type="button" style={s.activo ? deactivateButton : activateButton} disabled={guardando} onClick={() => void alternar("subrubro", s)}>{s.activo ? "Inactivar" : "Activar"}</button></div></td></tr>)}
+          {!visiblesSubrubros.length && <tr><td style={cell} colSpan={5}>No hay subrubros para mostrar.</td></tr>}
         </tbody></table></div>
       </section>
     </div>}
+    {landingEditando && <LandingEditor clase={landingEditando.clase} registroId={landingEditando.id} nombre={landingEditando.nombre} onClose={() => setLandingEditando(null)} onSaved={() => { setLandingEditando(null); setMensaje("Landing guardada correctamente."); void cargar(); }} />}
     {edicion && <div role="presentation" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, padding: 16 }}>
       <div role="dialog" aria-modal="true" aria-label={edicion.clase === "rubro" ? "Editar rubro" : "Editar subrubro"} style={{ width: "100%", maxWidth: 520, background: "white", borderRadius: 14, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
         <h3 style={{ marginTop: 0 }}>{edicion.id ? "Editar" : "Nuevo"} {edicion.clase}</h3>

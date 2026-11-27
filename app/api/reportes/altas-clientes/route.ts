@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getAltasClientes } from "@/lib/sql/reportes/altas-clientes";
@@ -8,9 +7,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    const token = req.headers
-      .get("Authorization")
-      ?.replace(/^Bearer\s+/i, "");
+    // ========================================================
+    // AUTENTICACIÓN
+    // ========================================================
+
+    const authorization = req.headers.get("Authorization");
+
+    const token = authorization
+      ?.match(/^Bearer\s+(\S+)$/i)?.[1];
 
     if (!token) {
       return NextResponse.json(
@@ -31,6 +35,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // ========================================================
+    // FILTROS
+    // ========================================================
+
     const params = req.nextUrl.searchParams;
 
     const desde = params.get("desde");
@@ -49,6 +57,11 @@ export async function GET(req: NextRequest) {
     const vendedorId =
       params.get("vendedorId") || undefined;
 
+    // ========================================================
+    // CONSULTA DEL REPORTE
+    // Los permisos se validan dentro de getAltasClientes.
+    // ========================================================
+
     const dashboard = await getAltasClientes(user.id, {
       desde,
       hasta,
@@ -61,28 +74,37 @@ export async function GET(req: NextRequest) {
         "Cache-Control": "private, no-store",
       },
     });
+
   } catch (error) {
     console.error("Error reporte altas clientes:", error);
 
     const mensaje =
       error instanceof Error ? error.message : "";
 
-    const esValidacion =
-      /fecha|inválid|supera/i.test(mensaje);
-
     const esAutorizacion =
       /no autorizado/i.test(mensaje);
 
+    const esValidacion =
+      /fecha|inválid|supera|período máximo/i.test(mensaje);
+
     return NextResponse.json(
       {
-        error: esValidacion
-          ? mensaje
-          : esAutorizacion
-            ? "No autorizado"
+        error: esAutorizacion
+          ? "No autorizado"
+          : esValidacion
+            ? mensaje
             : "Error obteniendo el reporte",
       },
       {
-        status: esValidacion ? 400 : esAutorizacion ? 403 : 500,
+        status: esAutorizacion
+          ? 403
+          : esValidacion
+            ? 400
+            : 500,
+
+        headers: {
+          "Cache-Control": "private, no-store",
+        },
       }
     );
   }

@@ -37,6 +37,7 @@ type FiltrosDisponibles = {
 
 type Reporte = {
     role: string;
+    opciones: { vendedores: { id: string; activo: boolean }[] };
     resumen: {
         clientesPeriodo: number;
         promedioDiario: number;
@@ -333,7 +334,7 @@ export default function AltasClientesPage() {
     // PERMISOS
     // ==========================================================
 
-    const role = filtros?.role?.toLowerCase() ?? "";
+    const role = reporte?.role?.trim().toLowerCase() ?? "";
 
     const esAdmin =
         role === "admin" || role === "gerente";
@@ -346,7 +347,7 @@ export default function AltasClientesPage() {
     // ==========================================================
 
     const opcionesResponsable = useMemo<OpcionResponsable[]>(() => {
-        if (!filtros) return [];
+        if (!filtros || !reporte) return [];
 
         const opciones: OpcionResponsable[] = [
             {
@@ -362,11 +363,11 @@ export default function AltasClientesPage() {
         if (esAdmin) {
             opciones.push({
                 value: "sin_supervisor",
-                label: "Sin supervisor histórico",
+                label: "Sin supervisor actual",
             });
         }
 
-        if (esAdmin || esSupervisor) {
+        if (esAdmin) {
             for (const supervisor of filtros.supervisores) {
                 opciones.push({
                     value: `supervisor:${supervisor.id}`,
@@ -375,7 +376,7 @@ export default function AltasClientesPage() {
             }
         }
 
-        if (!esVendedor) {
+        if (esAdmin) {
             for (const vendedor of vendedores) {
                 opciones.push({
                     value: `vendedor:${vendedor.id}`,
@@ -384,8 +385,18 @@ export default function AltasClientesPage() {
             }
         }
 
+        if (esSupervisor) {
+            for (const vendedor of reporte.opciones.vendedores) {
+                const perfil = vendedores.find((v) => v.id === vendedor.id);
+                const nombre = perfil ? nombreUsuario(perfil) : `Usuario ${vendedor.id.slice(0, 8)}`;
+                opciones.push({
+                    value: `vendedor:${vendedor.id}`,
+                    label: `Vendedor · ${nombre}${vendedor.activo ? "" : " (Inactivo)"}`,
+                });
+            }
+        }
         return opciones;
-    }, [filtros, vendedores, esAdmin, esSupervisor, esVendedor]);
+    }, [filtros, vendedores, reporte, esAdmin, esSupervisor, esVendedor]);
 
     // ==========================================================
     // APLICAR FILTROS
@@ -430,7 +441,7 @@ export default function AltasClientesPage() {
     );
 
     const graficoPorSupervisor =
-        responsableAplicado === "todos" && !esVendedor;
+        responsableAplicado === "todos" && esAdmin;
 
     const datosSupervisores = (
         reporte?.evolucionSupervisores ?? []
@@ -457,7 +468,7 @@ export default function AltasClientesPage() {
         );
     }
 
-    if (!filtros) {
+    if (!filtros || !reporte) {
         return (
             <div style={estilos.contenedor}>
                 <h2>No se pudo cargar el reporte.</h2>
@@ -491,7 +502,7 @@ export default function AltasClientesPage() {
                         marginTop: 8,
                     }}
                 >
-                    Evolución de leads incorporados a EN1CLIC
+                    {esVendedor ? "Evolución de mis altas de leads" : esSupervisor ? "Evolución de altas de leads de mi equipo" : "Evolución de leads incorporados a EN1CLIC"}
                 </p>
             </div>
 
@@ -554,7 +565,7 @@ export default function AltasClientesPage() {
                             onChange={(e) =>
                                 setResponsable(e.target.value)
                             }
-                            disabled={esVendedor}
+                            disabled={esVendedor || consultando}
                             style={estilos.control}
                         >
                             {opcionesResponsable.map((opcion) => (
@@ -621,7 +632,7 @@ export default function AltasClientesPage() {
                         }}
                     >
                         <KPICard
-                            titulo="Leads del período"
+                            titulo={esVendedor ? "Mis leads" : "Leads del período"}
                             valor={reporte.resumen.clientesPeriodo}
                         />
 
@@ -630,15 +641,19 @@ export default function AltasClientesPage() {
                             valor={reporte.resumen.promedioDiario}
                         />
 
-                        <KPICard
+                        {!esVendedor && (
+                            <KPICard
                             titulo="Vendedores con Leads"
                             valor={reporte.resumen.vendedoresConAltas}
                         />
+                        )}
 
-                        <KPICard
-                            titulo="Sin supervisor histórico"
+                        {esAdmin && (
+                            <KPICard
+                            titulo="Sin supervisor actual"
                             valor={reporte.resumen.sinSupervisor}
                         />
+                        )}
                     </div>
 
 
@@ -652,8 +667,8 @@ export default function AltasClientesPage() {
                         <p style={estilos.subtitulo}>
                             {reporte.resumen.diasPeriodo} días seleccionados.
                             {graficoPorSupervisor
-                                ? " Producción por supervisor histórico."
-                                : " Producción del responsable seleccionado."}
+                                ? " Producción por supervisor actual."
+                                : esVendedor ? " Evolución de mis altas." : esSupervisor && responsableAplicado === "todos" ? " Producción de mi equipo." : " Producción del responsable seleccionado."}
                         </p>
 
                         <div
@@ -823,6 +838,7 @@ export default function AltasClientesPage() {
                     )}
 
                     {/* TABLA POR VENDEDOR */}
+                    {!esVendedor && (
 
                     <section style={estilos.panel}>
                         <h2
@@ -933,12 +949,15 @@ export default function AltasClientesPage() {
                         </div>
                     </section>
 
-                    {/* MAPA GEOGRÁFICO - RESPETA LOS FILTROS APLICADOS */}
+                    )}
+                    {/* MAPA GEOGRÁFICO - pendiente de validar permisos */}
+                   
                     <MapaLeadsReporte
                         desde={fechasAplicadas.desde}
                         hasta={fechasAplicadas.hasta}
                         responsable={responsableAplicado}
                     />
+                   
                 </>
             )}
         </div>

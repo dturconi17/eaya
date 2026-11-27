@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -8,17 +7,53 @@ export const dynamic = "force-dynamic";
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const HEADERS = {
+  "Cache-Control": "private, no-store",
+};
+
+type Perfil = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  supervisor_id: string | null;
+  role: string | null;
+  activo: boolean;
+};
+
+function normalizarRol(role: string | null) {
+  return String(role ?? "").trim().toLowerCase();
+}
+
+function nombrePerfil(perfil: Perfil) {
+  return (
+    perfil.full_name?.trim() ||
+    perfil.email?.trim() ||
+    `Usuario ${perfil.id.slice(0, 8)}`
+  );
+}
+
+function responderError(error: string, status: number) {
+  return NextResponse.json(
+    { error },
+    {
+      status,
+      headers: HEADERS,
+    }
+  );
+}
+
 export async function GET(req: NextRequest) {
   try {
+    // ========================================================
+    // AUTENTICACIÓN
+    // ========================================================
+
     const token = req.headers
       .get("Authorization")
-      ?.replace(/^Bearer\s+/i, "");
+      ?.match(/^Bearer\s+(\S+)$/i)?.[1];
 
     if (!token) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 401 }
-      );
+      return responderError("No autorizado", 401);
     }
 
     const {
@@ -27,223 +62,208 @@ export async function GET(req: NextRequest) {
     } = await supabaseAdmin.auth.getUser(token);
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: "Token inválido" },
-        { status: 401 }
-      );
+      return responderError("Token inválido", 401);
     }
+
+    // ========================================================
+    // PERFIL Y PERMISOS
+    // ========================================================
 
     const { data: perfil, error: perfilError } =
       await supabaseAdmin
         .from("profiles")
-        .select("id, role, activo")
+        .select(
+          "id, full_name, email, supervisor_id, role, activo"
+        )
         .eq("id", user.id)
         .single();
 
-    if (perfilError || !perfil || !perfil.activo) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
-      );
+    if (perfilError || !perfil || perfil.activo !== true) {
+      return responderError("No autorizado", 403);
     }
 
-    const role = String(perfil.role).toLowerCase();
-    const administrador = role === "admin" || role === "gerente";
+    const role = normalizarRol(perfil.role);
 
-    if (!administrador && role !== "supervisor" && role !== "vendedor") {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
-      );
+    const administrador =
+      role === "admin" || role === "gerente";
+
+    const esSupervisor = role === "supervisor";
+    const esVendedor = role === "vendedor";
+
+    if (!administrador && !esSupervisor && !esVendedor) {
+      return responderError("No autorizado", 403);
     }
 
-    const solicitado = req.nextUrl.searchParams.get("supervisorId");
+    // ========================================================
+    // VALIDAR SUPERVISOR SOLICITADO
+    // ========================================================
+
+    const solicitado =
+      req.nextUrl.searchParams.get("supervisorId");
+
     let supervisorId: string | undefined;
 
-    if (role === "supervisor") {
+    if (esSupervisor) {
       if (solicitado && solicitado !== user.id) {
-        return NextResponse.json(
-          { error: "No autorizado" },
-          { status: 403 }
-        );
+        return responderError("No autorizado", 403);
       }
+
       supervisorId = user.id;
-    } else if (administrador && solicitado) {
-      if (solicitado !== "sin_supervisor" && !UUID.test(solicitado)) {
-        return NextResponse.json(
-          { error: "Supervisor inválido" },
-          { status: 400 }
-        );
+    }
+
+    if (administrador && solicitado) {
+      if (
+        solicitado !== "sin_supervisor" &&
+        !UUID.test(solicitado)
+      ) {
+        return responderError("Supervisor inválido", 400);
       }
+
       supervisorId = solicitado;
     }
 
-    if (role === "vendedor" && solicitado) {
+    if (esVendedor && solicitado) {
+      return responderError("No autorizado", 403);
+    }
+
+    // ========================================================
+    // VENDEDOR: SOLO SU PROPIO PERFIL
+    // ========================================================
+
+    if (esVendedor) {
       return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
+        {
+          role,
+          supervisores: [],
+          vendedores: [
+            {
+              id: perfil.id,
+              nombre: nombrePerfil(perfil),
+              supervisor_id: perfil.supervisor_id,
+              activo: perfil.activo,
+            },
+          ],
+        },
+        {
+          headers: HEADERS,
+        }
       );
     }
+
+    // ========================================================
+    // OBTENER ESTRUCTURA COMERCIAL ACTUAL
+    // ========================================================
+
+    const perfiles: Perfil[] = [];
+
+    for (let offset = 0; ; offset += 500) {
+      let query = supabaseAdmin
+        .from("profiles")
+        .select(
+          "id, full_name, email, supervisor_id, role, activo"
+        )
+        .order("id", { ascending: true })
+        .range(offset, offset + 499);
+
+      // El supervisor solo consulta su equipo actual.
+      if (esSupervisor) {
+        query = query.eq("supervisor_id", user.id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      perfiles.push(...(data ?? []));
+
+      if ((data ?? []).length < 500) break;
+    }
+
+    // ========================================================
+    // SUPERVISORES DISPONIBLES
+    // ========================================================
 
     let supervisores: {
       id: string;
       nombre: string;
+      activo: boolean;
     }[] = [];
 
     if (administrador) {
-      const { data, error } = await supabaseAdmin
-        .from("profiles")
-        .select("id, full_name, email")
-        .ilike("role", "supervisor")
-        .order("full_name");
-
-      if (error) throw error;
-
-      supervisores = (data ?? []).map((p) => ({
-        id: p.id,
-        nombre: p.full_name || p.email || "Sin nombre",
-      }));
-    } else if (role === "supervisor") {
-      const { data, error } = await supabaseAdmin
-        .from("profiles")
-        .select("id, full_name, email")
-        .eq("id", user.id)
-        .single();
-
-      if (error) throw error;
-
-      supervisores = [{
-        id: user.id,
-        nombre: data.full_name || data.email || "Mi equipo",
-      }];
+      supervisores = perfiles
+        .filter(
+          (p) => normalizarRol(p.role) === "supervisor"
+        )
+        .map((p) => ({
+          id: p.id,
+          nombre: nombrePerfil(p),
+          activo: p.activo,
+        }))
+        .sort((a, b) =>
+          a.nombre.localeCompare(b.nombre, "es")
+        );
     }
 
-    // Para un vendedor, mostrar únicamente su usuario.
-    if (role === "vendedor") {
-      const { data, error } = await supabaseAdmin
-        .from("profiles")
-        .select("id, full_name, email, supervisor_id")
-        .eq("id", user.id)
-        .single();
-
-      if (error) throw error;
-
-      return NextResponse.json({
-        role,
-        supervisores: [],
-        vendedores: [{
-          id: data.id,
-          nombre: data.full_name || data.email || "Mi usuario",
-          supervisor_id: data.supervisor_id,
-        }],
-      }, {
-        headers: { "Cache-Control": "private, no-store" },
-      });
+    if (esSupervisor) {
+      supervisores = [
+        {
+          id: perfil.id,
+          nombre: nombrePerfil(perfil),
+          activo: perfil.activo,
+        },
+      ];
     }
 
-    // Con supervisor seleccionado: vendedores que figuran
-    // históricamente como creadores de sus clientes.
-    let idsHistoricos: string[] = [];
+    // ========================================================
+    // VENDEDORES DISPONIBLES
+    // ========================================================
 
-    if (supervisorId) {
-      const encontrados = new Set<string>();
+    let perfilesVendedores = perfiles.filter(
+      (p) => normalizarRol(p.role) === "vendedor"
+    );
 
-      for (let offset = 0; ; offset += 500) {
-        let query = supabaseAdmin
-          .from("clientes")
-          .select("created_by")
-          .order("id")
-          .range(offset, offset + 499);
-
-        query = supervisorId === "sin_supervisor"
-          ? query.is("supervisor_id", null)
-          : query.eq("supervisor_id", supervisorId);
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        for (const c of data ?? []) {
-          if (c.created_by) encontrados.add(c.created_by);
-        }
-
-        if ((data ?? []).length < 500) break;
-      }
-
-      idsHistoricos = [...encontrados];
-    }
-
-    // También incluir los vendedores del equipo actual.
-    let queryActuales = supabaseAdmin
-      .from("profiles")
-      .select("id, full_name, email, supervisor_id")
-      .ilike("role", "vendedor")
-      .order("id");
-
-    if (supervisorId && supervisorId !== "sin_supervisor") {
-      queryActuales = queryActuales.eq(
-        "supervisor_id",
-        supervisorId
+    if (supervisorId === "sin_supervisor") {
+      perfilesVendedores = perfilesVendedores.filter(
+        (p) => p.supervisor_id === null
+      );
+    } else if (supervisorId) {
+      perfilesVendedores = perfilesVendedores.filter(
+        (p) => p.supervisor_id === supervisorId
       );
     }
 
-    const actuales: {
-      id: string;
-      full_name: string | null;
-      email: string | null;
-      supervisor_id: string | null;
-    }[] = [];
-
-    if (supervisorId !== "sin_supervisor") {
-      for (let offset = 0; ; offset += 500) {
-        const { data, error } = await queryActuales.range(
-          offset,
-          offset + 499
-        );
-
-        if (error) throw error;
-        actuales.push(...(data ?? []));
-
-        if ((data ?? []).length < 500) break;
-      }
-    }
-
-    const mapa = new Map(
-      actuales.map((p) => [p.id, p])
-    );
-
-    for (let i = 0; i < idsHistoricos.length; i += 200) {
-      const { data, error } = await supabaseAdmin
-        .from("profiles")
-        .select("id, full_name, email, supervisor_id")
-        .in("id", idsHistoricos.slice(i, i + 200));
-
-      if (error) throw error;
-
-      for (const p of data ?? []) {
-        mapa.set(p.id, p);
-      }
-    }
-
-    const vendedores = [...mapa.values()]
+    const vendedores = perfilesVendedores
       .map((p) => ({
         id: p.id,
-        nombre: p.full_name || p.email || "Sin nombre",
+        nombre: nombrePerfil(p),
         supervisor_id: p.supervisor_id,
+        activo: p.activo,
       }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+      .sort((a, b) =>
+        a.nombre.localeCompare(b.nombre, "es")
+      );
 
-    return NextResponse.json({
-      role,
-      supervisores,
-      vendedores,
-    }, {
-      headers: { "Cache-Control": "private, no-store" },
-    });
+    // ========================================================
+    // RESPUESTA
+    // ========================================================
+
+    return NextResponse.json(
+      {
+        role,
+        supervisores,
+        vendedores,
+      },
+      {
+        headers: HEADERS,
+      }
+    );
+
   } catch (error) {
     console.error("Error filtros reportes:", error);
-    return NextResponse.json(
-      { error: "Error obteniendo filtros" },
-      { status: 500 }
+
+    return responderError(
+      "Error obteniendo filtros",
+      500
     );
   }
 }

@@ -45,7 +45,7 @@ type MenuSection = {
 };
 
 const menuSections: MenuSection[] = [
-  {
+    {
     title: "Reportes Gerenciales",
     key: "informes_gerencial",
     roles: ["admin", "gerente"],
@@ -54,6 +54,10 @@ const menuSections: MenuSection[] = [
       {
         href: "/reportes/altas-clientes",
         label: "Resumen carga de prospectos",
+      },
+      {
+        href: "/reportes/leads",
+        label: "Listado de Leads",
       },
     ],
   },
@@ -64,8 +68,12 @@ const menuSections: MenuSection[] = [
     icon: <BarChart3 size={18} />,
     items: [
       {
-        href: "/clientes",
-        label: "Ventas por región",
+        href: "/reportes/altas-clientes",
+        label: "Resumen de mi equipo",
+      },
+      {
+        href: "/reportes/leads",
+        label: "Leads de mi equipo",
       },
     ],
   },
@@ -76,8 +84,12 @@ const menuSections: MenuSection[] = [
     icon: <BarChart3 size={18} />,
     items: [
       {
-        href: "/clientes",
-        label: "Mis clientes",
+        href: "/reportes/altas-clientes",
+        label: "Resumen de mis altas",
+      },
+      {
+        href: "/reportes/leads",
+        label: "Mis Leads",
       },
     ],
   },
@@ -161,7 +173,9 @@ export function SidebarMenu() {
 
   const { user, profile, role } = useUser();
 
-  const userRole = (role ?? "vendedor") as UserRole;
+  const userRole = String(role ?? "")
+  .trim()
+  .toLowerCase() as UserRole;
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openUserMenu, setOpenUserMenu] = useState(false);
